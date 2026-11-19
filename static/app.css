@@ -282,6 +282,8 @@ textarea.comment:focus { box-shadow: 0 0 0 3px var(--accent-soft); border-color:
 .files-line { margin-top: 14px; display: flex; gap: 6px; flex-wrap: wrap; }
 .link-btn { border: 0; background: none; color: var(--accent); cursor: pointer; padding: 0; font-size: 12px; }
 .link-btn:hover { text-decoration: underline; }
+.link-btn.danger { color: var(--red, #ff453a); }
+.link-btn:disabled { opacity: .5; }
 .placeholder { flex: 1; display: grid; place-items: center; color: var(--text3); text-align: center; padding: 40px; }
 .placeholder h2 { font-size: 15px; color: var(--text2); font-weight: 600; margin: 0 0 6px; }
 .keys { font-size: 11px; color: var(--text3); margin-top: 24px; line-height: 1.9; }

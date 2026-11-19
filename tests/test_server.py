@@ -223,6 +223,38 @@ class TokenLimit(unittest.TestCase):
             s.close()
 
 
+class CancelFromLine(unittest.TestCase):
+    """Accidental «Fix»: a queued job and a running job can both be cancelled."""
+
+    def test_cancel_running_and_queued(self):
+        s = Server("burn", settings={"max_job_tokens": 0})       # the agent never finishes on its own
+        try:
+            r1 = s.post("/api/queue/add?p=" + s.pid, {"item": "grp/01_a", "comment": "a"})[1]["job"]
+            r2 = s.post("/api/queue/add?p=" + s.pid, {"item": "grp/02_b", "comment": "b"})[1]["job"]
+            end = time.time() + 20
+            while time.time() < end:
+                jobs = {j["id"]: j for j in s.get("/api/queue")[1]["jobs"]}
+                if jobs[r1["id"]]["status"] == "running":
+                    break
+                time.sleep(0.2)
+            self.assertEqual(jobs[r2["id"]]["status"], "queued")
+            self.assertTrue(s.post("/api/queue/cancel", {"id": r2["id"]})[1]["ok"])
+            self.assertTrue(s.post("/api/queue/cancel", {"id": r1["id"]})[1]["ok"])
+            j1 = s.wait_job(r1["id"])
+            self.assertEqual(j1["status"], "cancelled")
+            jobs = {j["id"]: j for j in s.get("/api/queue")[1]["jobs"]}
+            self.assertEqual(jobs[r2["id"]]["status"], "cancelled")
+            # the agent is free again: a new job gets picked up
+            r3 = s.post("/api/queue/add?p=" + s.pid, {"item": "grp/02_b", "comment": "c"})[1]["job"]
+            end = time.time() + 20
+            while time.time() < end and {j["id"]: j for j in s.get("/api/queue")[1]["jobs"]}[r3["id"]]["status"] != "running":
+                time.sleep(0.2)
+            self.assertEqual({j["id"]: j for j in s.get("/api/queue")[1]["jobs"]}[r3["id"]]["status"], "running")
+            s.post("/api/queue/cancel", {"id": r3["id"]})
+        finally:
+            s.close()
+
+
 class Pitch(unittest.TestCase):
     def test_pitch_of_tones(self):
         import agents

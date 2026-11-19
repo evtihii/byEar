@@ -72,13 +72,29 @@ function renderJobInfo() {
   if (a) {
     const pos = S.jobs.filter((j) => j.status === "queued").findIndex((j) => j.id === a.id) + 1;
     chip.innerHTML = jobLine(a) + (a.status === "queued" && pos ? `<span class="chip">· ${pos}-а в черзі</span>` : "")
-      + ` <button class="link-btn" data-jobopen="${a.id}">деталі</button>`;
+      + ` <button class="link-btn" data-jobopen="${a.id}">деталі</button>`
+      + ` <button class="link-btn danger" data-jobcancel="${a.id}" title="${a.status === "running" ? "Зупинити агента й прибрати позначку «Виправити»" : "Прибрати з черги й зняти позначку «Виправити»"}">${a.status === "running" ? "зупинити" : "прибрати з черги"}</button>`;
   } else chip.innerHTML = l ? ` <button class="link-btn" data-jobopen="${l.id}">остання правка агента</button>` : "";
   const show = l && (l.status === "done" || l.status === "error") && l.result;
   const cost = l && (l.tokens || l.cost != null)
     ? `<span class="cost">${l.tokens ? Math.round(l.tokens / 1000) + " тис. токенів" : ""}${l.cost != null ? ` · ≈$${Number(l.cost).toFixed(2)}` : ""}</span>` : "";
   card.innerHTML = show ? `<div class="agent-card"><div class="h">${l.status === "error" ? "АГЕНТ: ПОМИЛКА" : "ВІДПОВІДЬ АГЕНТА"} · ${esc((l.finished || "").replace("T", " ").slice(5, 16))}${cost}</div>${esc(l.result)}${checkHtml(l)}</div>` : "";
 }
+/* ---------- випадкове «Виправити»: прибрати фразу з черги прямо з картки ---------- */
+document.addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-jobcancel]"); if (!b) return;
+  const j = S.jobs.find((x) => x.id === b.dataset.jobcancel); if (!j) return;
+  if (j.status === "running" && !confirm("Агент уже працює над цією фразою. Зупинити його?\nЯкщо він встиг змінити файл, ⌘Z поверне версію до правки.")) return;
+  b.disabled = true;
+  try {
+    await api("/api/queue/cancel", { id: j.id });
+    const it = j.item; const prev = (S.fb[it] || {}).status;
+    if (prev === "fix") { setFb(it, { status: null }); afterFbChange(); }
+    await refreshQueue(true); renderJobInfo();
+    toast(j.status === "running" ? "Агента зупинено, позначку «Виправити» знято" : "Прибрано з черги, позначку «Виправити» знято",
+      "Повернути", () => { if (S.sel === it) setStatus("fix"); else toast("Відкрий фразу й натисни «Виправити» ще раз"); });
+  } catch (err) { toast(err.message); b.disabled = false; }
+});
 /* ---------- автоперевірка правки агента: виміри проти еталона, «до / після» ---------- */
 function checkHtml(j) {
   const c = j.check; if (!c) return "";
