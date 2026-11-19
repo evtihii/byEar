@@ -152,6 +152,7 @@ async function openProject(pid, keepSel) {
   stopAll();
   S.pid = pid; ls.set("lastProject", pid);
   api("/api/state", { last_project: pid }).catch(() => {});
+  loadUsage(false);
   if (S.view === "home") setView("phrases", { restore: false });
   renderProjects();
   $("rows").innerHTML = '<div class="empty">Читаю папку…</div>';

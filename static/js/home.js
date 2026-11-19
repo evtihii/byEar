@@ -151,7 +151,8 @@ function renderJobDetail() {
       <dt>Додано</dt><dd>${esc((j.created || "").replace("T", " "))}</dd>
       ${j.started ? `<dt>Почато</dt><dd>${esc(j.started.replace("T", " "))}</dd>` : ""}
       ${j.finished ? `<dt>Завершено</dt><dd>${esc(j.finished.replace("T", " "))}</dd>` : ""}
-      ${j.tokens ? `<dt>Токени</dt><dd>${tok}${j.cost != null ? ` · ≈$${Number(j.cost).toFixed(2)} за цінами API` : ""}${j.ctx_after ? ` · контекст після: ${kfmt(j.ctx_after)}` : ""}</dd>` : ""}
+      ${j.tokens ? `<dt>Токени</dt><dd>${tok}${j.cost != null ? ` · <b style="color:var(--orange)">≈$${Number(j.cost).toFixed(2)}</b> за цінами API` : ""}${j.ctx_after ? ` · контекст після: ${kfmt(j.ctx_after)}` : ""}</dd>` : ""}
+      ${j.usage ? `<dt>${esc(j.usage.label)}</dt><dd><b style="color:var(--orange)">${Number(j.usage.spent).toLocaleString("uk-UA")} кредитів</b>${j.usage.left != null ? ` · лишилось ${Number(j.usage.left).toLocaleString("uk-UA")}` : ""}</dd>` : ""}
       ${j.note ? `<dt>Примітка</dt><dd>${esc(j.note)}</dd>` : ""}
     </dl>
     ${j.result ? `<div class="agent-card"><div class="h">${j.status === "error" ? "ПОМИЛКА" : "ВІДПОВІДЬ АГЕНТА"}</div>${esc(j.result)}</div>` : ""}

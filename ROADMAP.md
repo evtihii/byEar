@@ -42,6 +42,8 @@ Ideas for later: planned ahead, not implemented yet unless checked.
 - [x] `index.html` split into `static/app.css` + `static/js/*.js`; server tests in `tests/`.
 - [x] Port from `settings.json` (`port`) or `PORT` (server and ByEar.app); old logs and “before” copies rotate
   to the Trash; language tags and names come from the server (`/api/config`), a project can add `lang_names`.
+- [x] **Generation cost per job** (2026-11-20): credits spent on the generation service (ElevenLabs) via the
+  project's `usage_cmd`, shown in orange next to the Claude cost; remaining credits on the left rail.
 - [ ] Detect original audio pasted into the translation (e.g. English breaths) — needs audio fingerprinting.
 
 ## Other

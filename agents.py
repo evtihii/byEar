@@ -504,6 +504,7 @@ def _worker(find_project):
         tf = target_file(job["files"])
         tfull = os.path.join(project["path"], tf["path"]) if tf else None
         before = _snapshot_before(job, tfull)
+        u0 = project_usage(project, fresh=True)
         AGENT.state = "working"
         try:
             with open(logp, "a", encoding="utf-8") as log:
@@ -524,6 +525,11 @@ def _worker(find_project):
         if AGENT.alive() and AGENT.state == "working":
             AGENT.state = "idle"
         check = _after_job(job, project, tfull, before)
+        u1 = project_usage(project, fresh=True) if u0 else None
+        usage = None
+        if u0 and u1 and "used" in u0 and "used" in u1:
+            usage = {"label": u1["label"], "spent": max(0, u1["used"] - u0["used"]),
+                     "left": (u1["limit"] - u1["used"]) if u1.get("limit") else None}
         with qcond:
             q = load_queue()
             for j in q:
@@ -537,6 +543,7 @@ def _worker(find_project):
                     j["finished"] = _now()
                     j["before_file"] = check.pop("before_file", None)
                     j["check"] = check or None
+                    j["usage"] = usage
             save_queue(q)
             qcond.notify_all()
         th = settings.get("auto_compact_at") or 0
@@ -545,6 +552,37 @@ def _worker(find_project):
                 AGENT.compact()
             except Exception as e:                   # noqa: BLE001
                 AGENT.error = f"Стиснення не вдалося: {e}"
+
+
+# ---------- кредити сервісу генерації (ElevenLabs тощо) ----------
+# Проєкт може мати "usage_cmd": команда (список аргументів), що друкує JSON {"used", "limit", "reset"}.
+# Ключ API лишається в проєкті: наСлух лише запускає команду. Різниця «до / після» — ціна генерації правки.
+_usage_cache = {}
+USAGE_TTL = 120
+
+
+def project_usage(project, fresh=False):
+    cmd = project.get("usage_cmd") if project else None
+    if not cmd or not isinstance(cmd, list):
+        return None
+    pid = project["id"]
+    c = _usage_cache.get(pid)
+    if c and not fresh and time.time() - c["_t"] < USAGE_TTL:
+        return {k: v for k, v in c.items() if k != "_t"}
+    try:
+        r = subprocess.run([str(x) for x in cmd], capture_output=True, text=True, timeout=20,
+                           cwd=project.get("agent_cwd") or None)
+        d = json.loads(r.stdout.strip().splitlines()[-1])
+        if not isinstance(d.get("used"), (int, float)):
+            raise ValueError(d.get("error") or "немає used")
+    except Exception as e:                           # noqa: BLE001
+        out = {"label": project.get("usage_label") or "Генерація", "error": str(e)[:200]}
+        _usage_cache[pid] = {**out, "_t": time.time()}
+        return out
+    out = {"label": project.get("usage_label") or "Генерація", "used": d["used"], "limit": d.get("limit"),
+           "reset": d.get("reset")}
+    _usage_cache[pid] = {**out, "_t": time.time()}
+    return out
 
 
 def _snapshot_before(job, tfull):

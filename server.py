@@ -429,6 +429,12 @@ class Handler(BaseHTTPRequestHandler):
                 # мітки й мови — одне джерело для сервера й сторінки
                 self.send_json({"source_tags": SOURCE_TAGS, "target_tags": TARGET_TAGS,
                                 "lang_alias": LANG_ALIAS, "lang_names": LANG_NAMES})
+            elif path == "/api/usage":
+                # кредити сервісу генерації проєкту (кеш 2 хв; fresh=1 — оновити)
+                p = find_project(q.get("p", ""))
+                if not p:
+                    return self.error("Проєкт не знайдено", 404)
+                self.send_json({"usage": agents.project_usage(p, fresh=q.get("fresh") == "1")})
             elif path == "/api/before":
                 # версія файлу до правки агента (для «до / після»)
                 job = next((j for j in agents.load_queue() if j["id"] == q.get("id")), None)

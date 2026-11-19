@@ -53,7 +53,9 @@ class Server:
         self.projects = os.path.join(self.tmp, "projects.json")
         with open(self.projects, "w") as f:
             json.dump([{"name": "Test", "path": game, "agent_cwd": game,
-                        "agent_brief": os.path.join(self.tmp, "brief.md"), "default_ref": "en"}], f)
+                        "agent_brief": os.path.join(self.tmp, "brief.md"), "default_ref": "en",
+                        "usage_cmd": [sys.executable, os.path.join(HERE, "fake_usage.py")],
+                        "usage_label": "FakeLabs"}], f)
         self.data = os.path.join(self.tmp, "data")
         os.makedirs(self.data)
         if settings:
@@ -63,7 +65,8 @@ class Server:
         os.chmod(fake, 0o755)
         self.port = free_port()
         env = dict(os.environ, SLUHACH_PROJECTS=self.projects, SLUHACH_DATA=self.data,
-                   SLUHACH_CLAUDE=fake, PORT=str(self.port), FAKE_MODE=fake_mode)
+                   SLUHACH_CLAUDE=fake, PORT=str(self.port), FAKE_MODE=fake_mode,
+                   FAKE_USAGE_FILE=os.path.join(self.tmp, "usage.txt"))
         self.proc = subprocess.Popen([sys.executable, os.path.join(ROOT, "server.py"), "--no-open"],
                                      cwd=ROOT, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         for _ in range(100):
@@ -199,6 +202,17 @@ class AgentJobs(unittest.TestCase):
         # ⌘Z restores the version before the agent's edit
         st, h = self.s.post("/api/audio-undo?p=" + self.s.pid, {"f": "grp/01_a/ua.wav"})
         self.assertEqual(st, 200, h)
+
+    def test_generation_credits(self):
+        st, u = self.s.get("/api/usage?p=" + self.s.pid + "&fresh=1")
+        self.assertEqual(st, 200)
+        self.assertEqual(u["usage"]["label"], "FakeLabs")
+        self.assertEqual(u["usage"]["limit"], 100000)
+        st, r = self.s.post("/api/queue/add?p=" + self.s.pid, {"item": "grp/02_b", "comment": "кредити"})
+        j = self.s.wait_job(r["job"]["id"])
+        self.assertEqual(j["usage"]["label"], "FakeLabs")
+        self.assertEqual(j["usage"]["spent"], 340)
+        self.assertEqual(j["usage"]["left"], 100000 - j["usage"]["spent"] - (u["usage"]["used"]))
 
     def test_default_and_no_reference(self):
         st, r = self.s.post("/api/queue/add?p=" + self.s.pid, {"item": "grp/02_b", "comment": "x"})

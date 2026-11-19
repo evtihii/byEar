@@ -39,6 +39,10 @@ for line in sys.stdin:
         subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", src, "-af", "asetrate=48000*1.5,aresample=48000",
                         "-ac", "1", "-c:a", "pcm_s16le", tmp], check=True)
         os.replace(tmp, out)
+        uf = os.environ.get("FAKE_USAGE_FILE")       # "spend" 340 generation credits
+        if uf:
+            used = int(open(uf).read()) if os.path.exists(uf) else 1000
+            open(uf, "w").write(str(used + 340))
     print(json.dumps({"type": "assistant", "message": {"content": [{"type": "text", "text": "ok"}],
                                                        "usage": {"input_tokens": 1000, "output_tokens": 50}}}),
           flush=True)

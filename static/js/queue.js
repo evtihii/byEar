@@ -76,10 +76,35 @@ function renderJobInfo() {
       + ` <button class="link-btn danger" data-jobcancel="${a.id}" title="${a.status === "running" ? "Зупинити агента й прибрати позначку «Виправити»" : "Прибрати з черги й зняти позначку «Виправити»"}">${a.status === "running" ? "зупинити" : "прибрати з черги"}</button>`;
   } else chip.innerHTML = l ? ` <button class="link-btn" data-jobopen="${l.id}">остання правка агента</button>` : "";
   const show = l && (l.status === "done" || l.status === "error") && l.result;
-  const cost = l && (l.tokens || l.cost != null)
-    ? `<span class="cost">${l.tokens ? Math.round(l.tokens / 1000) + " тис. токенів" : ""}${l.cost != null ? ` · ≈$${Number(l.cost).toFixed(2)}` : ""}</span>` : "";
-  card.innerHTML = show ? `<div class="agent-card"><div class="h">${l.status === "error" ? "АГЕНТ: ПОМИЛКА" : "ВІДПОВІДЬ АГЕНТА"} · ${esc((l.finished || "").replace("T", " ").slice(5, 16))}${cost}</div>${esc(l.result)}${checkHtml(l)}</div>` : "";
+  const cost = l ? costHtml(l) : "";
+  card.innerHTML = show ? `<div class="agent-card"><div class="h">${l.status === "error" ? "АГЕНТ: ПОМИЛКА" : "ВІДПОВІДЬ АГЕНТА"} · ${esc((l.finished || "").replace("T", " ").slice(5, 16))}</div>${cost}${esc(l.result)}${checkHtml(l)}</div>` : "";
 }
+/* ---------- ціна правки: агент (токени, $) і генерація (кредити сервісу, напр. ElevenLabs) ---------- */
+function costParts(j) {
+  const out = [];
+  if (j.tokens) out.push(`Claude: ${Math.round(j.tokens / 1000)} тис. токенів${j.cost != null ? ` · ≈$${Number(j.cost).toFixed(2)}` : ""}`);
+  else if (j.cost != null) out.push(`Claude: ≈$${Number(j.cost).toFixed(2)}`);
+  if (j.usage) out.push(`${j.usage.label}: ${Number(j.usage.spent).toLocaleString("uk-UA")} кредитів`);
+  return out;
+}
+function costHtml(j) { const p = costParts(j); return p.length ? `<div class="cost">${p.map(esc).join(" &nbsp;·&nbsp; ")}</div>` : ""; }
+/* залишок кредитів сервісу генерації — на лівій смужці */
+async function loadUsage(fresh) {
+  const box = $("railUsage"); if (!box) return;
+  if (!S.pid) { box.hidden = true; return; }
+  let u = null;
+  try { u = (await api("/api/usage?p=" + encodeURIComponent(S.pid) + (fresh ? "&fresh=1" : ""))).usage; } catch {}
+  if (!u) { box.hidden = true; return; }
+  box.hidden = false;
+  $("railUsageLbl").textContent = u.label;
+  if (u.error || u.used == null) { $("railUsageNum").textContent = "?"; box.title = `${u.label}: не вдалося дізнатися залишок (${u.error || ""})`; return; }
+  const left = u.limit != null ? u.limit - u.used : null;
+  $("railUsageNum").textContent = left == null ? kfmt(u.used) : kfmt(left);
+  box.classList.toggle("low", left != null && u.limit && left / u.limit < 0.1);
+  box.title = `${u.label}: використано ${u.used.toLocaleString("uk-UA")}${u.limit ? " з " + u.limit.toLocaleString("uk-UA") : ""} кредитів`
+    + (u.reset ? `\nОновлення: ${new Date(u.reset * 1000).toLocaleDateString("uk-UA", { day: "numeric", month: "long" })}` : "");
+}
+setInterval(() => loadUsage(false), 5 * 60 * 1000);
 /* ---------- випадкове «Виправити»: прибрати фразу з черги прямо з картки ---------- */
 document.addEventListener("click", async (e) => {
   const b = e.target.closest("[data-jobcancel]"); if (!b) return;
@@ -148,7 +173,7 @@ async function refreshQueue(force) {
   }
   if (!changed && !force) { if (S.view === "queue") refreshLog(); return; }
   const finishedHere = S.jobs.some((j) => j.pid === S.pid && (j.status === "done" || j.status === "error") && prev.get(j.id) !== j.status);
-  if (finishedHere) { S.needReload = true; refreshIfChanged(); }
+  if (finishedHere) { S.needReload = true; refreshIfChanged(); loadUsage(true); }
   if (S.view === "queue") { renderQueueList(); renderJobDetail(); return; }
   for (const j of S.jobs) if (j.pid === S.pid && (prev.get(j.id) !== j.status)) updateRow(j.item);
   renderJobInfo();

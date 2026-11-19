@@ -36,7 +36,12 @@ Feedback is stored in `summary.json` inside the project folder.
 Project fields:
 - `agent_cwd`, `agent_brief` — the folder the agent works in and its brief (without them the queue is off);
 - `default_ref` — the original language used as the agent's reference by default
-  (can be changed per line with the “reference” buttons under the originals).
+  (can be changed per line with the “reference” buttons under the originals);
+- `usage_cmd`, `usage_label` — optional command that prints the generation service's credit counter as JSON
+  `{"used": …, "limit": …, "reset": <unix time>}` (e.g. a small script that asks ElevenLabs with the
+  project's own key). ByEar runs it before and after each agent job and shows the difference as the
+  generation cost; the remaining credits appear on the left rail. API keys stay in the project — ByEar
+  never reads them.
 
 Audio, API keys and local data (queue, logs, edit history) never go into the repository — see `.gitignore`.
 
