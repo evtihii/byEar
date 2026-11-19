@@ -1,0 +1,9 @@
+[
+  {
+    "name": "My Game",
+    "path": "/path/to/game/listen",
+    "agent_cwd": "/path/to/game",
+    "agent_brief": "/path/to/game/scripts/AGENT_BRIEF.md",
+    "default_ref": "en"
+  }
+]

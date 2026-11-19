@@ -1,0 +1,41 @@
+# --- Audio: game banks, originals, translations — never in the repo
+*.wav
+*.mp3
+*.m4a
+*.aac
+*.flac
+*.ogg
+*.opus
+*.aif
+*.aiff
+*.wem
+*.bnk
+*.pak
+*.ucas
+*.utoc
+
+# --- Keys and secrets
+*.env
+.env*
+*.key
+*.pem
+secrets*
+
+# --- Local user data (folder paths, comments, queue, logs, audio edit history)
+projects.json
+summary.json
+state.json
+settings.json
+queue.json
+agent_settings.json
+logs/
+history/
+old_feedback/
+legacy/
+agent_workdir/
+
+# --- Build output and system files
+ByEar.app/
+__pycache__/
+*.pyc
+.DS_Store
