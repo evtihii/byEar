@@ -4,8 +4,6 @@
 import Cocoa
 import WebKit
 
-let port = Int(ProcessInfo.processInfo.environment["PORT"] ?? "") ?? 8765   // PORT — лише для тестів
-let baseURL = URL(string: "http://localhost:\(port)/")!
 
 func serverDir() -> String {
     // Тека з server.py: ключ ByEarServerDir в Info.plist, інакше — тека, де лежить ByEar.app
@@ -13,6 +11,18 @@ func serverDir() -> String {
        FileManager.default.fileExists(atPath: d + "/server.py") { return d }
     return Bundle.main.bundleURL.deletingLastPathComponent().path
 }
+
+// Порт: змінна PORT → "port" у settings.json поруч із server.py → 8765 (так само, як у server.py)
+func serverPort() -> Int {
+    if let e = ProcessInfo.processInfo.environment["PORT"], let p = Int(e) { return p }
+    let f = URL(fileURLWithPath: serverDir() + "/settings.json")
+    if let d = try? Data(contentsOf: f),
+       let j = try? JSONSerialization.jsonObject(with: d) as? [String: Any],
+       let p = j["port"] as? Int { return p }
+    return 8765
+}
+let port = serverPort()
+let baseURL = URL(string: "http://localhost:\(port)/")!
 
 final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNavigationDelegate {
     var window: NSWindow!

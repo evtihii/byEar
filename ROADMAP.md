@@ -29,6 +29,21 @@ Ideas for later: planned ahead, not implemented yet unless checked.
   alongside or inside the installer. Build on a Windows machine or in CI.
 - [ ] English UI (the interface is Ukrainian for now).
 
+## Quality and safety (found 2026-11-19)
+- [x] **Reject cross-site requests.** Host must be localhost/127.0.0.1/[::1] with our port; POSTs must come
+  from the ByEar page (Origin) and carry `application/json` — blocks CSRF and DNS rebinding.
+- [x] **Verify agent results automatically.** After each job ByEar measures pitch (f0), loudness (LUFS) and
+  length of the new file, the version before the edit and the reference (`analysis.py`, no numpy), and flags
+  large differences next to the agent's reply.
+- [x] **Previous version A/B.** The version an agent overwrote is kept (`before/`, pushed to undo history):
+  “▶ До правки” plays it, ⌘Z restores it.
+- [x] **Cost visible and capped.** Tokens/cost in the agent reply card; `max_job_tokens` in `settings.json`
+  (default 1 000 000) stops a job that goes over.
+- [x] `index.html` split into `static/app.css` + `static/js/*.js`; server tests in `tests/`.
+- [x] Port from `settings.json` (`port`) or `PORT` (server and ByEar.app); old logs and “before” copies rotate
+  to the Trash; language tags and names come from the server (`/api/config`), a project can add `lang_names`.
+- [ ] Detect original audio pasted into the translation (e.g. English breaths) — needs audio fingerprinting.
+
 ## Other
 - [ ] Documentation link on the home page (`DOCS_URL` in `index.html`, empty for now).
 - [ ] Paths to sound banks per project (postponed).

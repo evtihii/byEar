@@ -17,6 +17,8 @@ import threading
 import time
 import uuid
 
+import analysis
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.environ.get("SLUHACH_DATA") or HERE
 QUEUE_FILE = os.path.join(DATA, "queue.json")
@@ -25,11 +27,18 @@ LOGS_DIR = os.path.join(DATA, "logs")
 VOLUME_TRASH = os.path.expanduser("~/.Trash/ByEar_volume")
 HISTORY_DIR = os.path.join(DATA, "history")      # версії файлів для «Скасувати» (⌘Z) і «Повторити» (⌘⇧Z)
 HISTORY_MAX = 30
+BEFORE_DIR = os.path.join(DATA, "before")        # версія файлу до правки агента (для «до / після»)
+OLD_LOGS_TRASH = os.path.expanduser("~/.Trash/ByEar_old_logs")
+KEEP_LOGS = 300                                  # журналів правок лишати
+KEEP_BEFORE = 150                                # копій «до правки» лишати
+AGENT_LOG_MAX = 5 * 1024 * 1024
 
 DEFAULT_SETTINGS = {
     "model": "claude-sonnet-5-5",    # модель агента (примусово дешевша)
     "auto_compact_at": 100000,       # стискати контекст, коли він більший (0 — лише вручну)
     "timeout_min": 25,               # максимум хвилин на одну правку
+    "max_job_tokens": 1000000,       # ліміт токенів на одну правку (0 — без ліміту)
+    "port": 8765,                    # порт сервера (і ByEar.app); змінна PORT має перевагу
 }
 OBSOLETE = ("workers", "reset_after")
 TOOLS = "Bash,Read,Write,Edit,Glob,Grep"
@@ -306,9 +315,10 @@ class Agent:
             except OSError:
                 pass
 
-    def turn(self, text, log=None, timeout=None, cancelled=lambda: False):
-        """Надіслати повідомлення й дочекатися відповіді (event result)."""
-        out = {"text": "", "error": True, "tokens": 0, "cost": None, "meta": None}
+    def turn(self, text, log=None, timeout=None, cancelled=lambda: False, max_tokens=0):
+        """Надіслати повідомлення й дочекатися відповіді (event result).
+        max_tokens — зупинити агента, якщо правка використала більше токенів."""
+        out = {"text": "", "error": True, "tokens": 0, "cost": None, "meta": None, "limit": False}
         self._send(text)
         deadline = time.time() + timeout if timeout else None
         interrupted_at = None
@@ -337,6 +347,13 @@ class Agent:
                 u = (ev.get("message") or {}).get("usage") or {}
                 out["tokens"] += sum(int(u.get(k) or 0) for k in (
                     "input_tokens", "output_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"))
+                if max_tokens and out["tokens"] > max_tokens and interrupted_at is None:
+                    interrupted_at = time.time()
+                    out["limit"] = True
+                    self.interrupt()
+                    if log:
+                        log.write(f"=== {_now()} зупиняю агента: перевищено ліміт {max_tokens} токенів\n")
+                        log.flush()
                 if log:
                     for b in (ev.get("message") or {}).get("content") or []:
                         if b.get("type") == "text" and b.get("text", "").strip():
@@ -359,6 +376,9 @@ class Agent:
                 if interrupted_at:
                     out["error"] = True
                     out["text"] = out["text"] or "Зупинено"
+                    if out["limit"]:
+                        out["text"] = (f"Зупинено: правка перевищила ліміт {max_tokens:,} токенів".replace(",", " ")
+                                       + ". Файл міг лишитися напівготовим — послухай або скасуй (⌘Z).")
                 return out
 
     def compact(self):
@@ -481,6 +501,9 @@ def _worker(find_project):
             AGENT.start(settings, _project_dirs(find_project) | need)
         os.makedirs(LOGS_DIR, exist_ok=True)
         logp = os.path.join(LOGS_DIR, f"{job['id']}.log")
+        tf = target_file(job["files"])
+        tfull = os.path.join(project["path"], tf["path"]) if tf else None
+        before = _snapshot_before(job, tfull)
         AGENT.state = "working"
         try:
             with open(logp, "a", encoding="utf-8") as log:
@@ -490,7 +513,7 @@ def _worker(find_project):
                 def cancelled():
                     return any(j.get("cancel") for j in load_queue() if j["id"] == job["id"])
                 r = AGENT.turn(_prompt(job, project, project["id"] not in AGENT.briefed), log,
-                               settings["timeout_min"] * 60, cancelled)
+                               settings["timeout_min"] * 60, cancelled, settings.get("max_job_tokens") or 0)
                 log.write(f"=== {_now()} завершено: {'помилка' if r['error'] else 'готово'}, "
                           f"{r['tokens']} токенів, контекст тепер {AGENT.ctx}\n")
             if not r["error"]:
@@ -500,6 +523,7 @@ def _worker(find_project):
             r = {"error": True, "text": f"Збій агента: {e}", "cost": None, "tokens": None}
         if AGENT.alive() and AGENT.state == "working":
             AGENT.state = "idle"
+        check = _after_job(job, project, tfull, before)
         with qcond:
             q = load_queue()
             for j in q:
@@ -511,6 +535,8 @@ def _worker(find_project):
                     j["tokens"] = r.get("tokens")
                     j["ctx_after"] = AGENT.ctx
                     j["finished"] = _now()
+                    j["before_file"] = check.pop("before_file", None)
+                    j["check"] = check or None
             save_queue(q)
             qcond.notify_all()
         th = settings.get("auto_compact_at") or 0
@@ -521,9 +547,96 @@ def _worker(find_project):
                 AGENT.error = f"Стиснення не вдалося: {e}"
 
 
+def _snapshot_before(job, tfull):
+    """Копія цільового файлу до правки агента + крок в історії (⌘Z поверне версію до правки)."""
+    if not tfull or not os.path.isfile(tfull):
+        return None
+    try:
+        os.makedirs(BEFORE_DIR, exist_ok=True)
+        name = job["id"] + os.path.splitext(tfull)[1].lower()
+        shutil.copy2(tfull, os.path.join(BEFORE_DIR, name))
+        history_push(tfull)
+        return {"name": name, "mtime": os.path.getmtime(tfull)}
+    except OSError:
+        return None
+
+
+def _after_job(job, project, tfull, before):
+    """Чи змінився файл; виміри нового файлу, еталона й версії до правки; попередження."""
+    out = {}
+    if not before or not tfull or not os.path.isfile(tfull):
+        return out
+    if os.path.getmtime(tfull) == before["mtime"]:           # агент файл не чіпав
+        history_drop_last(tfull)
+        try:
+            os.remove(os.path.join(BEFORE_DIR, before["name"]))
+        except OSError:
+            pass
+        return {"changed": False}
+    out["before_file"] = before["name"]
+    out["changed"] = True
+    if not FFMPEG:
+        return out
+    m = lambda f: analysis.measure(FFMPEG, _measure, _duration, f)  # noqa: E731
+    out["new"] = m(tfull)
+    out["before"] = m(os.path.join(BEFORE_DIR, before["name"]))
+    if job.get("ref_file"):
+        rf = os.path.join(project["path"], job["ref_file"])
+        if os.path.isfile(rf):
+            out["ref"] = m(rf)
+            out["ref_lang"] = job.get("ref")
+            out["warnings"] = analysis.compare(out["new"], out["ref"])
+    return out
+
+
+def history_drop_last(full):
+    """Прибрати останній крок історії (коли агент файл так і не змінив)."""
+    with hist_lock:
+        d, meta = _hist(full)
+        if meta["undo"]:
+            try:
+                os.remove(meta["undo"].pop())
+            except OSError:
+                pass
+            _hist_save(d, meta)
+
+
+def _rotate(folder, keep, skip=()):
+    """Старі файли теки — у Кошик (нічого не видаляємо назавжди)."""
+    try:
+        files = [os.path.join(folder, f) for f in os.listdir(folder) if f not in skip and not f.startswith(".")]
+    except OSError:
+        return
+    files = sorted((f for f in files if os.path.isfile(f)), key=os.path.getmtime)
+    old = files[:-keep] if len(files) > keep else []
+    if not old:
+        return
+    dst = os.path.join(OLD_LOGS_TRASH, time.strftime("%Y%m%d_%H%M%S") + "_" + os.path.basename(folder))
+    os.makedirs(dst, exist_ok=True)
+    for f in old:
+        try:
+            shutil.move(f, os.path.join(dst, os.path.basename(f)))
+        except OSError:
+            pass
+
+
+def rotate_logs():
+    _rotate(LOGS_DIR, KEEP_LOGS, skip=("agent.log", "app_server.log"))
+    _rotate(BEFORE_DIR, KEEP_BEFORE)
+    for name in ("agent.log",):                      # app_server.log ByEar.app перестворює сам
+        f = os.path.join(LOGS_DIR, name)
+        try:
+            if os.path.getsize(f) > AGENT_LOG_MAX:
+                os.makedirs(OLD_LOGS_TRASH, exist_ok=True)
+                shutil.move(f, os.path.join(OLD_LOGS_TRASH, time.strftime("%Y%m%d_%H%M%S_") + name))
+        except OSError:
+            pass
+
+
 def start_workers(find_project, target_tags, source_tags):
     global _target_tags, _source_tags
     _target_tags, _source_tags = target_tags, source_tags
+    rotate_logs()
     with qcond:                                      # після перезапуску: незавершені — знову в чергу
         q = load_queue()
         for j in q:

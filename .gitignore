@@ -30,6 +30,7 @@ queue.json
 agent_settings.json
 logs/
 history/
+before/
 old_feedback/
 legacy/
 agent_workdir/

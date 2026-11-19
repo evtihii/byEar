@@ -39,3 +39,26 @@ Project fields:
   (can be changed per line with the “reference” buttons under the originals).
 
 Audio, API keys and local data (queue, logs, edit history) never go into the repository — see `.gitignore`.
+
+## After each agent job
+
+ByEar keeps the version the agent overwrote (“▶ До правки” plays it, ⌘Z restores it) and measures pitch,
+loudness and length of the new file against the reference and the previous version. Large differences
+(e.g. a pitch-shifted voice or a much quieter take) are flagged next to the agent's reply, together with the
+job's token count and cost. A job that goes over `max_job_tokens` is stopped.
+
+## Settings (`settings.json`, created on first run)
+
+- `model` — agent model; `timeout_min` — minutes per job; `max_job_tokens` — token limit per job;
+- `auto_compact_at` — compact the agent's context above this size;
+- `port` — server port (default 8765; the `PORT` environment variable wins). ByEar.app reads the same file.
+
+## Security
+
+The server listens on 127.0.0.1 only and refuses requests whose Host is not localhost, POSTs from other
+origins and non-JSON POSTs, so a web page open in your browser cannot queue jobs for the agent.
+
+## Tests
+
+`python3 -m unittest discover -s tests` — starts real servers on free ports with a temporary project and a
+fake agent (`tests/fake_agent.py`). Requires ffmpeg.

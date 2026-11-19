@@ -25,11 +25,13 @@ from urllib.parse import parse_qs, urlparse
 HERE = os.path.dirname(os.path.abspath(__file__))
 PROJECTS_FILE = os.environ.get("SLUHACH_PROJECTS") or os.path.join(HERE, "projects.json")
 PAGE_FILE = os.path.join(HERE, "index.html")
+STATIC_DIR = os.path.join(HERE, "static")
 FEEDBACK_NAME = "summary.json"
 STATE_FILE = os.path.join(os.environ.get("SLUHACH_DATA") or HERE, "state.json")   # останній відкритий проєкт тощо
 OLD_FEEDBACK_NAMES = ("відгук.json",)   # старі назви — переносяться в summary.json автоматично
 HOST = "127.0.0.1"
-PORT = int(os.environ.get("PORT", "8765"))
+# Порт: змінна PORT → "port" у settings.json → 8765 (ByEar.app читає той самий settings.json)
+PORT = int(os.environ.get("PORT") or agents.load_settings().get("port") or 8765)
 
 AUDIO_EXT = {".wav", ".mp3", ".m4a", ".aac", ".flac", ".ogg", ".opus", ".aif", ".aiff"}
 MIME = {
@@ -43,6 +45,9 @@ TARGET_TAGS = ["ua", "uk", "ukr", "new"]
 TAGS = "|".join(SOURCE_TAGS + TARGET_TAGS)
 # Синоніми мов → один код (для вибору еталона): eng → en, jp/jpn → ja, uk/ukr → ua
 LANG_ALIAS = {"eng": "en", "jp": "ja", "jpn": "ja", "uk": "ua", "ukr": "ua"}
+# Назви мов для підказок в інтерфейсі; проєкт може доповнити їх полем "lang_names" у projects.json
+LANG_NAMES = {"en": "англійська", "ja": "японська", "ua": "українська", "ko": "корейська",
+              "zh": "китайська", "fr": "французька", "de": "німецька", "es": "іспанська", "pl": "польська"}
 
 
 def canon(tag):
@@ -337,15 +342,52 @@ class Handler(BaseHTTPRequestHandler):
         u = urlparse(self.path)
         return u.path, {k: v[0] for k, v in parse_qs(u.query).items()}
 
+    # --- захист від чужих сайтів ---
+    # Сервер слухає лише 127.0.0.1, але браузер може надіслати сюди запит з будь-якого відкритого сайту
+    # (CSRF), а також через підміну DNS (DNS rebinding). Черга правок запускає агента з Bash, тож:
+    #  - Host має бути localhost / 127.0.0.1 / [::1] з нашим портом;
+    #  - POST: якщо є Origin, він має бути нашою ж сторінкою; тіло — лише application/json
+    #    (такий запит браузер не відправить з чужого сайту без дозволу CORS, а дозволу ми не даємо).
+    def allowed(self, post=False):
+        hosts = {f"{h}:{PORT}" for h in ("localhost", "127.0.0.1", "[::1]")}
+        host = (self.headers.get("Host") or "").lower()
+        if host not in hosts:
+            return False
+        if post:
+            origin = self.headers.get("Origin")
+            if origin is not None and origin.lower() not in {"http://" + h for h in hosts}:
+                return False
+            ctype = (self.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+            if int(self.headers.get("Content-Length") or 0) and ctype != "application/json":
+                return False
+        return True
+
     # --- GET ---
     def do_GET(self):
         path, q = self.qs()
+        if not self.allowed():
+            return self.error("Заборонено", 403)
         try:
             if path in ("/", "/index.html"):
                 with open(PAGE_FILE, "rb") as f:
                     body = f.read()
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                self.wfile.write(body)
+            elif path.startswith("/static/"):
+                # стилі й скрипти сторінки (static/app.css, static/js/*.js)
+                rel = path[len("/static/"):]
+                full = os.path.normpath(os.path.join(STATIC_DIR, rel))
+                ext = os.path.splitext(full)[1].lower()
+                if not full.startswith(STATIC_DIR + os.sep) or ext not in (".css", ".js") or not os.path.isfile(full):
+                    return self.error("Немає такого файлу", 404)
+                with open(full, "rb") as f:
+                    body = f.read()
+                self.send_response(200)
+                self.send_header("Content-Type", ("text/css" if ext == ".css" else "text/javascript") + "; charset=utf-8")
                 self.send_header("Content-Length", str(len(body)))
                 self.send_header("Cache-Control", "no-store")
                 self.end_headers()
@@ -383,6 +425,18 @@ class Handler(BaseHTTPRequestHandler):
                                 "feedback": fbd["items"], "folders": fbd.get("folders") or {}})
             elif path == "/api/queue":
                 self.send_json(agents.queue_state())
+            elif path == "/api/config":
+                # мітки й мови — одне джерело для сервера й сторінки
+                self.send_json({"source_tags": SOURCE_TAGS, "target_tags": TARGET_TAGS,
+                                "lang_alias": LANG_ALIAS, "lang_names": LANG_NAMES})
+            elif path == "/api/before":
+                # версія файлу до правки агента (для «до / після»)
+                job = next((j for j in agents.load_queue() if j["id"] == q.get("id")), None)
+                name = job and job.get("before_file")
+                full = os.path.join(agents.BEFORE_DIR, name) if name else None
+                if not full or os.path.basename(name) != name or not os.path.isfile(full):
+                    return self.error("Версії до правки немає", 404)
+                self.send_file(full)
             elif path == "/api/queue/log":
                 self.send_json({"log": agents.read_log(q.get("id", ""))})
             elif path == "/file":
@@ -436,6 +490,8 @@ class Handler(BaseHTTPRequestHandler):
     # --- POST ---
     def do_POST(self):
         path, q = self.qs()
+        if not self.allowed(post=True):
+            return self.error("Заборонено: запит не з наСлуху", 403)
         try:
             data = self.body_json()
         except json.JSONDecodeError:
