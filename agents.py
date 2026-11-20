@@ -34,6 +34,7 @@ OLD_LOGS_TRASH = os.path.expanduser("~/.Trash/ByEar_old_logs")
 KEEP_LOGS = 300                                  # журналів правок лишати
 KEEP_BEFORE = 150                                # копій «до правки» лишати
 AGENT_LOG_MAX = 5 * 1024 * 1024
+LIMITS_FILE = os.path.join(DATA, "limits.json")   # останні ліміти плану Claude (5 год / тиждень)
 
 DEFAULT_SETTINGS = {
     "model": "claude-sonnet-5-5",    # модель агента (примусово дешевша)
@@ -41,6 +42,9 @@ DEFAULT_SETTINGS = {
     "timeout_min": 25,               # максимум хвилин на одну правку
     "max_job_tokens": 1000000,       # ліміт токенів на одну правку (0 — без ліміту)
     "port": 8765,                    # порт сервера (і ByEar.app); змінна PORT має перевагу
+    "dictation_lang": "uk",          # мова диктування (Whisper)
+    "whisper_model": "",             # шлях до моделі Whisper; порожньо — знайти найкращу в ~/.cache/whisper
+    "dictation_prompt": "",          # підказка Whisper: імена й терміни, які треба писати правильно
 }
 OBSOLETE = ("workers", "reset_after")
 TOOLS = "Bash,Read,Write,Edit,Glob,Grep"
@@ -267,6 +271,8 @@ class Agent:
                     u = (ev.get("message") or {}).get("usage") or {}
                     self.ctx = sum(int(u.get(k) or 0) for k in (
                         "input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"))
+                elif ev.get("type") == "rate_limit_event":
+                    record_limits(ev.get("rate_limit_info"))
                 elif ev.get("type") == "system" and ev.get("subtype") == "init":
                     self.session = ev.get("session_id") or self.session
                 evq.put(ev)
@@ -585,6 +591,86 @@ def project_usage(project, fresh=False):
            "reset": d.get("reset")}
     _usage_cache[pid] = {**out, "_t": time.time()}
     return out
+
+
+# --- ліміти плану Claude ---
+# Claude Code сам повідомляє їх у потоці подій («rate_limit_event»): частка використаного 5-годинного й
+# тижневого вікна і коли воно скинеться. наСлух лише запам'ятовує останнє — вхід в акаунт не потрібен.
+_limits_lock = threading.Lock()
+_limits_refreshing = False
+LIMITS_WINDOWS = ("five_hour", "seven_day", "seven_day_opus", "seven_day_sonnet")
+
+
+def record_limits(info):
+    if not isinstance(info, dict):
+        return
+    wins = {}
+    for k, w in (info.get("unifiedWindows") or {}).items():
+        if isinstance(w, dict) and w.get("utilization") is not None:
+            wins[k] = {"used": float(w["utilization"]), "resets": w.get("resetsAt"), "status": w.get("status")}
+    k = info.get("rateLimitType")
+    if k and k not in wins and info.get("utilization") is not None:
+        wins[k] = {"used": float(info["utilization"]), "resets": info.get("resetsAt"), "status": info.get("status")}
+    if not wins and not info.get("status"):
+        return
+    with _limits_lock:
+        old = _read_json(LIMITS_FILE, {}) or {}
+        merged = {**(old.get("windows") or {}), **wins}
+        _write_json(LIMITS_FILE, {"windows": merged, "status": info.get("status"), "seen": int(time.time()),
+                                  "overage": bool(info.get("isUsingOverage"))})
+
+
+def claude_limits():
+    """Останні відомі ліміти; вікно, що вже скинулось, показується як 0 %."""
+    d = _read_json(LIMITS_FILE, None)
+    out = {"available": bool(d and d.get("windows")), "refreshing": _limits_refreshing, "claude": bool(CLAUDE)}
+    if not out["available"]:
+        return out
+    now = time.time()
+    wins = {}
+    for k, w in d["windows"].items():
+        w = dict(w)
+        if w.get("resets") and w["resets"] <= now:
+            w.update(used=0.0, status="allowed", stale=True, resets=None)
+        wins[k] = w
+    out.update(windows=wins, seen=d.get("seen"), status=d.get("status"), overage=d.get("overage", False))
+    return out
+
+
+def refresh_limits(wait=False):
+    """Дізнатися ліміти зараз: короткий запит до найдешевшої моделі (одна відповідь «ok»)."""
+    global _limits_refreshing
+    if not CLAUDE or _limits_refreshing:
+        return False
+
+    def run():
+        global _limits_refreshing
+        try:
+            cwd = os.path.join(DATA, "agent_workdir")
+            os.makedirs(cwd, exist_ok=True)
+            _write_json(os.path.join(DATA, "agent_settings.json"), {"disableAllHooks": True})
+            p = subprocess.run([CLAUDE, "-p", "--model", "haiku", "--output-format", "stream-json", "--verbose",
+                                "--tools", "", "--strict-mcp-config", "--no-chrome", "--no-session-persistence",
+                                "--settings", os.path.join(DATA, "agent_settings.json")],
+                               cwd=cwd, input="Reply with: ok", capture_output=True, text=True, timeout=90)
+            for line in p.stdout.splitlines():
+                try:
+                    ev = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if ev.get("type") == "rate_limit_event":
+                    record_limits(ev.get("rate_limit_info"))
+        except Exception:                            # noqa: BLE001
+            pass
+        finally:
+            _limits_refreshing = False
+
+    _limits_refreshing = True
+    if wait:
+        run()
+    else:
+        threading.Thread(target=run, daemon=True).start()
+    return True
 
 
 def _snapshot_before(job, tfull):

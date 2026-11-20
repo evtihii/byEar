@@ -39,6 +39,7 @@ cat > "$APP/Contents/Info.plist" <<EOF
   <key>LSMinimumSystemVersion</key><string>13.0</string>
   <key>NSHighResolutionCapable</key><true/>
   <key>ByEarServerDir</key><string>$ROOT</string>
+  <key>NSMicrophoneUsageDescription</key><string>наСлух записує голос для диктування коментаря; розпізнає локальний Whisper, запис нікуди не надсилається.</string>
   <key>NSAppTransportSecurity</key><dict><key>NSAllowsLocalNetworking</key><true/></dict>
 </dict></plist>
 EOF

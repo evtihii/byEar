@@ -6,6 +6,11 @@ Ideas for later: planned ahead, not implemented yet unless checked.
 - [x] **Claude Code** as the fix agent: one persistent `claude` session per app run, context meter, compact. (2026-11-19)
 - [ ] **Codex** as an alternative agent. Make the agent layer pluggable (start / send job / interrupt /
   compact / context size), pick the agent per project in `projects.json`.
+- [x] **Claude plan limits on the rail** (2026-11-20): how much of the 5-hour and the weekly window is used and
+  when each resets (tooltip), a warning before sending a job at ≥ 90 % or when the limit is reached. Taken from
+  Claude Code's own `rate_limit_event` in the agent stream and kept in `limits.json`; on start (if older than an
+  hour) or on click ByEar asks a tiny Haiku “ok” to refresh. No account login or token handling.
+- [ ] **Codex plan limits** the same way, once Codex is an agent.
 
 ## Originals in several languages
 - [x] Several original tracks per line (`en.wav`, `ja.wav` …), an “Original” group separate from
@@ -48,6 +53,8 @@ Ideas for later: planned ahead, not implemented yet unless checked.
   `tempo.py` also works from the command line. Higher quality (rubberband) if ffmpeg is built with it.
 - [x] **Echo with two knobs** (2026-11-20): amount and tail, whole file or region, loudness kept; `echo.py` CLI.
 - [ ] Estimate the echo of the reference (tail length/level after speech) and offer “echo like EN”.
+- [x] **Dictation with local Whisper** (2026-11-20): record in the page, whisper.cpp on the server, text into the
+  comment; disabled with a tooltip + install guide (`/docs/whisper.html`) when Whisper is missing.
 - [ ] Detect original audio pasted into the translation (e.g. English breaths) — needs audio fingerprinting.
 
 ## Settings page
@@ -62,5 +69,5 @@ Ideas for later: planned ahead, not implemented yet unless checked.
   - The agent keeps using the project's own key file; the integration is for ByEar's own counters.
 
 ## Other
-- [ ] Documentation link on the home page (`DOCS_URL` in `index.html`, empty for now).
+- [x] Documentation link on the home page: `/docs/` served from `static/docs/` (2026-11-20).
 - [ ] Paths to sound banks per project (postponed).

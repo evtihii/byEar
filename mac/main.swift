@@ -131,6 +131,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
         if p.isRunning { kill(p.processIdentifier, SIGKILL) }
     }
 
+    // ---------- мікрофон для диктування (запис у сторінці → Whisper на сервері) ----------
+    @available(macOS 12.0, *)
+    func webView(_ w: WKWebView, requestMediaCapturePermissionFor origin: WKSecurityOrigin,
+                 initiatedByFrame f: WKFrameInfo, type: WKMediaCaptureType,
+                 decisionHandler: @escaping (WKPermissionDecision) -> Void) {
+        let local = origin.host == "localhost" || origin.host == "127.0.0.1"
+        decisionHandler(local && type == .microphone ? .grant : .deny)
+    }
+
     // ---------- WebKit: діалоги, посилання ----------
     func webView(_ w: WKWebView, runJavaScriptAlertPanelWithMessage m: String,
                  initiatedByFrame f: WKFrameInfo, completionHandler done: @escaping () -> Void) {

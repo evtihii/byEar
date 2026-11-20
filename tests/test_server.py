@@ -13,6 +13,7 @@ import sys
 import tempfile
 import time
 import unittest
+from pathlib import Path
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -218,6 +219,19 @@ class AgentJobs(unittest.TestCase):
         self.assertEqual(j["usage"]["label"], "FakeLabs")
         self.assertEqual(j["usage"]["spent"], 340)
         self.assertEqual(j["usage"]["left"], 100000 - j["usage"]["spent"] - (u["usage"]["used"]))
+
+    def test_claude_limits(self):
+        # the startup probe (fake agent) fills them in; a job keeps them current
+        for _ in range(50):
+            st, lim = self.s.get("/api/limits")
+            if lim.get("available"):
+                break
+            time.sleep(0.1)
+        self.assertTrue(lim["available"], lim)
+        self.assertAlmostEqual(lim["windows"]["five_hour"]["used"], 0.42)
+        self.assertIn("seven_day", lim["windows"])
+        st, r = self.s.post("/api/limits/refresh", {})
+        self.assertEqual(st, 200)
 
     def test_default_and_no_reference(self):
         st, r = self.s.post("/api/queue/add?p=" + self.s.pid, {"item": "grp/02_b", "comment": "x"})
@@ -428,6 +442,74 @@ class EchoApi(unittest.TestCase):
             st, h = s.post("/api/audio-undo?p=" + s.pid, {"f": "grp/01_a/ua.wav"})
             self.assertEqual(st, 200)
             self.assertEqual(h["history"]["undo"], 0)
+        finally:
+            s.close()
+
+
+class Dictation(unittest.TestCase):
+    """Local Whisper dictation: status, refusal without a model, end-to-end with an English model if present."""
+    EN_MODEL = os.path.expanduser("~/.cache/whisper/ggml-base.en.bin")
+
+    def test_unavailable_without_model(self):
+        s = Server("noop", settings={"whisper_model": "/nonexistent/ggml-x.bin"})
+        try:
+            st, d = s.get("/api/dictation")
+            self.assertEqual(st, 200)
+            self.assertFalse(d["available"])
+            self.assertTrue(d["reason"])
+            st, r = s.post("/api/dictate", {"audio": "AAAA", "ext": "wav"})
+            self.assertEqual(st, 400)
+        finally:
+            s.close()
+
+    def test_english_model_is_not_used_for_ukrainian(self):
+        import dictation
+        d = tempfile.mkdtemp()
+        try:
+            open(os.path.join(d, "ggml-base.en.bin"), "wb").close()
+            old = dictation.MODEL_DIRS
+            dictation.MODEL_DIRS = [d]
+            try:
+                m, note = dictation.find_model({}, "uk")
+                self.assertIsNone(m)
+                self.assertIn(".en.bin", note)
+                m, _ = dictation.find_model({}, "en")
+                self.assertTrue(m.endswith("ggml-base.en.bin"))
+            finally:
+                dictation.MODEL_DIRS = old
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+    @unittest.skipUnless(shutil.which("whisper-cli") and shutil.which("say")
+                         and os.path.isfile(os.path.expanduser("~/.cache/whisper/ggml-base.en.bin")),
+                         "needs whisper-cli, say and the base.en model")
+    def test_end_to_end_english(self):
+        import base64
+        d = tempfile.mkdtemp()
+        s = Server("noop", settings={"whisper_model": self.EN_MODEL, "dictation_lang": "en"})
+        try:
+            f = os.path.join(d, "v.aiff")
+            subprocess.run(["say", "-o", f, "The voice is too quiet at the end."], check=True)
+            st, d1 = s.get("/api/dictation")
+            self.assertTrue(d1["available"], d1)
+            st, r = s.post("/api/dictate", {"audio": base64.b64encode(Path(f).read_bytes()).decode(), "ext": "aiff"})
+            self.assertEqual(st, 200, r)
+            self.assertIn("quiet", r["text"].lower())
+        finally:
+            s.close()
+            shutil.rmtree(d, ignore_errors=True)
+
+    def test_docs_pages(self):
+        s = Server("noop")
+        try:
+            st, body = s.get("/docs/")
+            self.assertEqual(st, 200)
+            self.assertIn("whisper.html".encode(), body)
+            st, body = s.get("/docs/whisper.html")
+            self.assertEqual(st, 200)
+            self.assertIn("brew install whisper-cpp".encode(), body)
+            self.assertEqual(s.get("/docs/../server.py")[0], 404)
+            self.assertEqual(s.get("/static/docs/../../server.py")[0], 404)
         finally:
             s.close()
 

@@ -43,6 +43,11 @@ Project fields:
   generation cost; the remaining credits appear on the left rail. API keys stay in the project — ByEar
   never reads them.
 
+The left rail also shows the **Claude plan limits**: how much of the 5-hour window is used (big number) and of
+the week (below), with reset times in the tooltip. ByEar takes them from Claude Code's own stream
+(`rate_limit_event`), so it never touches your login; click the block to refresh. Before a job is sent at
+≥ 90 % (or when a limit is reached) ByEar asks first.
+
 Audio, API keys and local data (queue, logs, edit history) never go into the repository — see `.gitignore`.
 
 ## Tempo without pitch change
@@ -57,6 +62,14 @@ python3 tempo.py in.wav out.wav --speed 1.1                     # 10 % faster (s
 python3 tempo.py in.wav out.wav --length 3.2                    # whole file 3.2 s long
 python3 tempo.py in.wav out.wav --speed 0.9 --start 1 --end 2.5 # only that region, slower
 ```
+
+## Dictation
+
+The “Диктувати” button next to the comment (or the D key) records your voice and a **local Whisper**
+(whisper.cpp `whisper-cli` + a multilingual ggml model in `~/.cache/whisper/`) turns it into text at the cursor.
+Nothing leaves the machine. Without Whisper the button is disabled; hovering it explains why and links to the
+install guide at `/docs/whisper.html` (`static/docs/`). Settings: `dictation_lang` (default `uk`),
+`whisper_model`, `dictation_prompt` (names Whisper should spell right).
 
 ## Echo
 

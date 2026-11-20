@@ -13,10 +13,23 @@ import subprocess
 import sys
 
 mode = os.environ.get("FAKE_MODE", "edit")
+FIVE = float(os.environ.get("FAKE_FIVE_HOUR", "0.42"))
+
+
+def rate_limits():
+    """What Claude Code reports about the plan limits after each reply."""
+    w = {"five_hour": {"utilization": FIVE, "resetsAt": 4102444800, "status": "allowed"},
+         "seven_day": {"utilization": 0.3, "resetsAt": 4102444800, "status": "allowed"}}
+    print(json.dumps({"type": "rate_limit_event", "rate_limit_info": {
+        "status": "allowed", "rateLimitType": "five_hour", "unifiedWindows": w}}), flush=True)
+
+
 for line in sys.stdin:
     try:
         msg = json.loads(line)
-    except json.JSONDecodeError:
+    except json.JSONDecodeError:                     # plain prompt (the limits probe)
+        rate_limits()
+        print(json.dumps({"type": "result", "subtype": "success", "result": "ok"}), flush=True)
         continue
     if msg.get("type") == "control_request":
         print(json.dumps({"type": "result", "subtype": "error_during_execution", "is_error": True,
@@ -46,5 +59,6 @@ for line in sys.stdin:
     print(json.dumps({"type": "assistant", "message": {"content": [{"type": "text", "text": "ok"}],
                                                        "usage": {"input_tokens": 1000, "output_tokens": 50}}}),
           flush=True)
+    rate_limits()
     print(json.dumps({"type": "result", "subtype": "success", "is_error": False, "result": "Готово (тест).",
                       "session_id": "s1", "total_cost_usd": 0.01}), flush=True)

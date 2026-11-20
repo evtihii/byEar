@@ -19,8 +19,9 @@ import time
 import webbrowser
 
 import agents
+import dictation
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PROJECTS_FILE = os.environ.get("SLUHACH_PROJECTS") or os.path.join(HERE, "projects.json")
@@ -377,17 +378,19 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_header("Cache-Control", "no-store")
                 self.end_headers()
                 self.wfile.write(body)
-            elif path.startswith("/static/"):
-                # стилі й скрипти сторінки (static/app.css, static/js/*.js)
-                rel = path[len("/static/"):]
+            elif path.startswith("/static/") or path.startswith("/docs/"):
+                # стилі й скрипти сторінки (static/app.css, static/js/*.js) і документація (/docs/ → static/docs/)
+                rel = path[len("/static/"):] if path.startswith("/static/") else "docs/" + (path[len("/docs/"):] or "index.html")
+                rel = unquote(rel)
                 full = os.path.normpath(os.path.join(STATIC_DIR, rel))
                 ext = os.path.splitext(full)[1].lower()
-                if not full.startswith(STATIC_DIR + os.sep) or ext not in (".css", ".js") or not os.path.isfile(full):
+                allowed = (".css", ".js", ".html") if full.startswith(os.path.join(STATIC_DIR, "docs") + os.sep) else (".css", ".js")
+                if not full.startswith(STATIC_DIR + os.sep) or ext not in allowed or not os.path.isfile(full):
                     return self.error("Немає такого файлу", 404)
                 with open(full, "rb") as f:
                     body = f.read()
                 self.send_response(200)
-                self.send_header("Content-Type", ("text/css" if ext == ".css" else "text/javascript") + "; charset=utf-8")
+                self.send_header("Content-Type", {".css": "text/css", ".js": "text/javascript", ".html": "text/html"}[ext] + "; charset=utf-8")
                 self.send_header("Content-Length", str(len(body)))
                 self.send_header("Cache-Control", "no-store")
                 self.end_headers()
@@ -435,6 +438,12 @@ class Handler(BaseHTTPRequestHandler):
                 if not p:
                     return self.error("Проєкт не знайдено", 404)
                 self.send_json({"usage": agents.project_usage(p, fresh=q.get("fresh") == "1")})
+            elif path == "/api/limits":
+                # ліміти плану Claude (5 год / тиждень), останні відомі
+                self.send_json(agents.claude_limits())
+            elif path == "/api/dictation":
+                # чи доступне диктування (локальний Whisper) і чому ні
+                self.send_json(dictation.status(agents.load_settings()))
             elif path == "/api/before":
                 # версія файлу до правки агента (для «до / після»)
                 job = next((j for j in agents.load_queue() if j["id"] == q.get("id")), None)
@@ -605,6 +614,8 @@ class Handler(BaseHTTPRequestHandler):
             elif path == "/api/queue/retry":
                 j = agents.retry_job(str(data.get("id")))
                 self.send_json({"ok": bool(j), "job": j})
+            elif path == "/api/limits/refresh":
+                self.send_json({"ok": agents.refresh_limits()})
             elif path == "/api/agent/compact":
                 if agents.AGENT.ctx is None or not agents.AGENT.alive():
                     return self.error("Агент ще нічого не робив — стискати нічого")
@@ -656,6 +667,21 @@ class Handler(BaseHTTPRequestHandler):
                 except (RuntimeError, ValueError, TypeError) as e:
                     return self.error(str(e))
                 self.send_json({"ok": True, "mtime": round(os.path.getmtime(full), 2), "info": info})
+            elif path == "/api/dictate":
+                # {audio: base64, ext: "webm"|"mp4"|"wav"} → {text}
+                import base64
+                try:
+                    raw = base64.b64decode(str(data.get("audio") or ""), validate=True)
+                except ValueError:
+                    return self.error("Некоректний запис")
+                if not raw:
+                    return self.error("Порожній запис")
+                ext = re.sub(r"[^a-z0-9]", "", str(data.get("ext") or "webm").lower())[:5] or "webm"
+                try:
+                    text = dictation.transcribe(agents.FFMPEG, raw, ext, agents.load_settings())
+                except (RuntimeError, subprocess.TimeoutExpired) as e:
+                    return self.error(str(e))
+                self.send_json({"ok": True, "text": text})
             elif path == "/api/projects/add":
                 name = str(data.get("name") or "").strip()
                 folder = os.path.abspath(os.path.expanduser(str(data.get("path") or "").strip()))
@@ -715,6 +741,9 @@ def main():
     if not os.path.exists(PROJECTS_FILE):
         save_projects([])
     agents.start_workers(find_project, TARGET_TAGS, SOURCE_TAGS)
+    lim = agents.claude_limits()
+    if not lim.get("available") or time.time() - (lim.get("seen") or 0) > 3600:
+        agents.refresh_limits()                      # ліміти Claude застаріли — дізнатися у фоні
     print(f"наСлух працює: {url}")
     print("Щоб зупинити — закрийте це вікно або натисніть Ctrl+C.")
     if "--no-open" not in sys.argv:

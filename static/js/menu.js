@@ -1,5 +1,64 @@
 /* ByEar (наСлух) — контекстне меню по правому кліку: «Показати у Finder», «Відкрити теку».
    Звичайний (не модульний) скрипт: файли static/js/* вантажаться по черзі й ділять глобальну область. */
+/* ---------- диктування: запис голосу в сторінці → локальний Whisper на сервері → текст у коментар ---------- */
+S.dict = null;                                        // {available, reason, model_name, lang}
+let rec = null;                                        // {recorder, stream, chunks, t0, timer}
+async function loadDictation() {
+  try { S.dict = await api("/api/dictation"); } catch { S.dict = { available: false, reason: "Сервер не відповідає" }; }
+  renderDictBtn();
+}
+function renderDictBtn() {
+  const b = $("dictBtn"), tip = $("dictTip"); if (!b) return;
+  const d = S.dict;
+  if (rec) return;
+  b.classList.remove("rec");
+  b.disabled = !d || !d.available;
+  b.innerHTML = `${I.mic} Диктувати`;
+  b.title = d && d.available ? `Надиктувати коментар (Whisper ${d.model_name || ""}, мова ${d.lang || "uk"}). Клавіша D` : "";
+  if (tip) tip.innerHTML = d && !d.available
+    ? `<b>Диктування недоступне.</b> ${esc(d.reason || "")}.<br><a href="/docs/whisper.html" target="_blank" rel="noopener">Як встановити Whisper →</a>` : "";
+}
+function blobToB64(blob) {
+  return new Promise((ok, bad) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(",")[1] || ""); r.onerror = bad; r.readAsDataURL(blob); });
+}
+async function startDictation() {
+  const b = $("dictBtn"); const ta = $("comment"); if (!b || !ta) return;
+  if (rec) { rec.recorder.stop(); return; }                       // друге натискання — зупинити
+  if (!S.dict || !S.dict.available) { toast("Диктування недоступне: " + ((S.dict && S.dict.reason) || "немає Whisper")); return; }
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+  catch { toast("Немає доступу до мікрофона. Дозволь його для наСлуху: Системні параметри → Приватність і безпека → Мікрофон"); return; }
+  const type = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"].find((t) => window.MediaRecorder && MediaRecorder.isTypeSupported(t)) || "";
+  const recorder = new MediaRecorder(stream, type ? { mimeType: type } : undefined);
+  const chunks = [];
+  recorder.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+  const itemId = S.sel;
+  recorder.onstop = async () => {
+    clearInterval(rec.timer); stream.getTracks().forEach((t) => t.stop()); rec = null;
+    const bb = $("dictBtn"); if (bb) { bb.classList.remove("rec"); bb.disabled = true; bb.innerHTML = `${I.mic} Розпізнаю…`; }
+    try {
+      const blob = new Blob(chunks, { type: recorder.mimeType || type || "audio/webm" });
+      if (blob.size < 2000) { toast("Запис закороткий"); return; }
+      const ext = (blob.type.includes("mp4") ? "mp4" : blob.type.includes("ogg") ? "ogg" : "webm");
+      const r = await api("/api/dictate", { audio: await blobToB64(blob), ext });
+      const text = (r.text || "").trim();
+      if (!text) { toast("Нічого не розпізнано"); return; }
+      const t = $("comment");
+      if (t && S.sel === itemId) {
+        const s = t.selectionStart ?? t.value.length, e = t.selectionEnd ?? t.value.length;
+        const pre = t.value.slice(0, s); const sep = pre && !/\s$/.test(pre) ? " " : "";
+        t.setRangeText(sep + text, s, e, "end"); t.dispatchEvent(new Event("input")); t.focus();
+      } else { setFb(itemId, { comment: (((S.fb[itemId] || {}).comment || "") + " " + text).trim() }); toast("Текст додано в коментар фрази, з якої почався запис"); }
+    } catch (err) { toast(err.message); }
+    finally { renderDictBtn(); }
+  };
+  rec = { recorder, stream, chunks, t0: Date.now(), timer: null };
+  recorder.start(250);
+  b.classList.add("rec"); b.disabled = false;
+  const tick = () => { const s = Math.floor((Date.now() - rec.t0) / 1000); b.innerHTML = `● Зупинити ${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; if (s >= 120) recorder.stop(); };
+  tick(); rec.timer = setInterval(tick, 500);
+}
+loadDictation();
 const ctxEl = document.createElement("div");
 ctxEl.className = "ctx"; ctxEl.hidden = true; document.body.appendChild(ctxEl);
 let ctxItems = [];

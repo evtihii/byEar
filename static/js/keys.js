@@ -29,6 +29,7 @@ document.addEventListener("keydown", (e) => {
   else if (c === "Digit1") setStatus("ok");
   else if (c === "Digit2") setStatus("fix");
   else if (c === "Digit0" || c === "Backspace") { if (S.sel && (S.fb[S.sel] || {}).status) { setFb(S.sel, { status: null }); afterFbChange(); } }
+  else if (c === "KeyD") { e.preventDefault(); startDictation(); }
   else if (c === "KeyC") { const ta = $("comment"); if (ta) { e.preventDefault(); ta.focus(); } }
   else if (c === "ArrowRight" || c === "ArrowLeft") { const p = players[activeIdx]; if (p && isFinite(p.duration)) { e.preventDefault(); p.audio.currentTime = Math.max(0, Math.min(p.duration, p.audio.currentTime + (c === "ArrowRight" ? 1 : -1))); p.draw(); } }
   else if (c === "Tab" && players.length > 1) { e.preventDefault(); activate((activeIdx + (e.shiftKey ? players.length - 1 : 1)) % players.length); }
