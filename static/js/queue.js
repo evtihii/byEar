@@ -125,8 +125,11 @@ async function loadUsage(fresh) {
   const left = u.limit != null ? u.limit - u.used : null;
   $("railUsageNum").textContent = left == null ? kfmt(u.used) : kfmt(left);
   box.classList.toggle("low", left != null && u.limit && left / u.limit < 0.1);
-  box.title = `${u.label}: використано ${u.used.toLocaleString("uk-UA")}${u.limit ? " з " + u.limit.toLocaleString("uk-UA") : ""} кредитів`
-    + (u.reset ? `\nОновлення: ${new Date(u.reset * 1000).toLocaleDateString("uk-UA", { day: "numeric", month: "long" })}` : "");
+  const n = (v) => Number(v).toLocaleString("uk-UA");
+  box.title = (left != null ? `${u.label}: лишилось ${n(left)} кредитів\n` : `${u.label}\n`)
+    + `Використано ${n(u.used)}${u.limit ? " з " + n(u.limit) : ""}`
+    + (u.limit ? ` (${Math.round(u.used / u.limit * 100)}%)` : "")
+    + (u.reset ? `\nЛіміт оновиться ${new Date(u.reset * 1000).toLocaleDateString("uk-UA", { day: "numeric", month: "long" })}` : "");
 }
 setInterval(() => loadUsage(false), 5 * 60 * 1000);
 /* ---------- випадкове «Виправити»: прибрати фразу з черги прямо з картки ---------- */

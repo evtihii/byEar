@@ -48,6 +48,17 @@ Ideas for later: planned ahead, not implemented yet unless checked.
   `tempo.py` also works from the command line. Higher quality (rubberband) if ffmpeg is built with it.
 - [ ] Detect original audio pasted into the translation (e.g. English breaths) — needs audio fingerprinting.
 
+## Settings page
+- [ ] **Settings page in the app** instead of editing `settings.json` / `projects.json` by hand: agent model,
+  token limit per job, auto-compact threshold, port, per-project reference language.
+- [ ] **Integrations with services** (ElevenLabs first; later other TTS / speech-to-text / LLM providers):
+  the reviewer just pastes an API key. ByEar then shows the credits left and the cost per job without a
+  per-project `usage_cmd` script.
+  - Keys are stored only on this machine, in the macOS Keychain (not in the repo, not in project folders);
+    the page never reads a key back, it only shows “connected” with the last 4 characters.
+  - “Check connection” button; per-project choice of which integration counts the generation cost.
+  - The agent keeps using the project's own key file; the integration is for ByEar's own counters.
+
 ## Other
 - [ ] Documentation link on the home page (`DOCS_URL` in `index.html`, empty for now).
 - [ ] Paths to sound banks per project (postponed).
