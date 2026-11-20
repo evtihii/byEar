@@ -641,7 +641,11 @@ class Handler(BaseHTTPRequestHandler):
                     return self.error("Файл не знайдено", 404)
                 ref = safe_join(p["path"], str(data.get("ref") or "")) if data.get("ref") else None
                 try:
-                    if data.get("op") == "tempo":
+                    if data.get("op") == "echo":
+                        # луна: amount (%), tail (с), tone (Гц, необов'язково); весь файл або start/end
+                        info = agents.audio_echo(full, rel, data.get("amount"), data.get("tail"),
+                                                 data.get("start"), data.get("end"), data.get("tone"))
+                    elif data.get("op") == "tempo":
                         # темп без зміни висоти: speed (множник) або length (с); fit_ref — довжина як в еталоні
                         info = agents.audio_tempo(full, rel, data.get("speed"), data.get("length"),
                                                   data.get("start"), data.get("end"),

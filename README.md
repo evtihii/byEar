@@ -58,6 +58,17 @@ python3 tempo.py in.wav out.wav --length 3.2                    # whole file 3.2
 python3 tempo.py in.wav out.wav --speed 0.9 --start 1 --end 2.5 # only that region, slower
 ```
 
+## Echo
+
+“Луна” row: amount (%) and tail (seconds until it dies out), for the whole file or the selected region (a
+quick “Луна” button appears on a selection). The loudness of the words stays the same; ⌘Z removes it.
+10 % is barely audible, 30 % a room, 70 % a large hall. From the command line:
+
+```
+python3 echo.py in.wav out.wav --amount 30 --tail 1.0
+python3 echo.py in.wav out.wav --amount 50 --tail 2 --start 1 --end 2.4
+```
+
 ## After each agent job
 
 ByEar keeps the version the agent overwrote (“▶ До правки” plays it, ⌘Z restores it) and measures pitch,

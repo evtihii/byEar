@@ -19,6 +19,7 @@ import uuid
 
 import analysis
 import tempo
+import echo
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.environ.get("SLUHACH_DATA") or HERE
@@ -855,6 +856,35 @@ def audio_tempo(full, rel, speed=None, length=None, start=None, end=None, ref=No
     os.replace(tmp, full)
     return {"speed": round(speed, 3), "before": round(total, 2), "after": round(_duration(full) or 0, 2),
             "history": history_state(full)}
+
+
+def audio_echo(full, rel, amount, tail, start=None, end=None, tone=4000.0):
+    """Додати луну (echo.py): amount 1…100 %, tail — секунд до згасання; весь файл або шматок.
+    Гучність лишається тією самою. Стара версія — у Кошик і в історію (⌘Z)."""
+    if not FFMPEG or not FFPROBE:
+        raise RuntimeError("Не знайдено ffmpeg")
+    total = _duration(full) or 0
+    part = start is not None and end is not None
+    try:
+        amount, tail = float(amount), float(tail)
+    except (TypeError, ValueError):
+        raise RuntimeError("Вкажи силу луни (%) і хвіст (с)")
+    _backup(full, rel)
+    history_push(full)
+    ext = os.path.splitext(full)[1].lower()
+    tmp = full + ".tmp" + ext
+    try:
+        echo.add(FFMPEG, full, tmp, amount, tail, start if part else None, end if part else None, total,
+                 float(tone or 4000), _codec_args(full))
+    except (ValueError, RuntimeError):
+        history_drop_last(full)
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        raise
+    os.replace(tmp, full)
+    return {"amount": amount, "tail": tail, "history": history_state(full)}
 
 
 def audio_edit(full, rel, op, db=0.0, start=None, end=None, ref=None):

@@ -72,6 +72,26 @@ async function editTempo(it, opts) {
     renderDetail(); updateRow(it.id); renderFilters();          // виділення скидається: після зміни темпу час зсунувся
   } catch (err) { toast(err.message); busy(false); }
 }
+/* луна: сила (%) і хвіст (с) з рядка «Луна»; на виділеному шматку — лише там */
+async function editEcho(it) {
+  const p = editPlayer(); const f = p ? p.file : volTarget(it); const sel = p && p.sel ? p.sel : null;
+  const amount = Number($("echoAmt").value), tail = Number($("echoTail").value);
+  if (!(amount >= 1 && amount <= 100)) { toast("Сила луни — від 1 до 100 %"); $("echoAmt").focus(); return; }
+  if (!(tail >= 0.1 && tail <= 4)) { toast("Хвіст луни — від 0.1 до 4 с"); $("echoTail").focus(); return; }
+  ls.set("echoAmt", amount); ls.set("echoTail", tail);
+  const body = { f: f.path, op: "echo", amount, tail };
+  if (sel) { body.start = sel[0]; body.end = sel[1]; }
+  const ids = ["echoBtn", "tempoBtn", "fitBtn", "volBtn", "normBtn"]; const busy = (v) => { ids.forEach((id) => { const b = $(id); if (b) b.disabled = v; }); if (p && p.bar) p.bar.querySelectorAll("button").forEach((b) => b.disabled = v); };
+  busy(true);
+  try {
+    const r = await api("/api/audio-edit?p=" + encodeURIComponent(S.pid), body);
+    f.mtime = r.mtime; it.mtime = Math.max(...it.files.map((x) => x.mtime || 0)); S.sig = projectSig(S.items);
+    const where = sel ? `шматок ${sel[0].toFixed(1)}–${sel[1].toFixed(1)} с` : f.name;
+    toast(`${where}: луна ${amount}%, хвіст ${tail} с`, "Скасувати ⌘Z", () => undoAudio(false));
+    renderDetail(); updateRow(it.id); renderFilters();
+    if (sel) { const np = editPlayer(); if (np) setTimeout(() => np.setSel(sel[0], sel[1]), 50); }
+  } catch (err) { toast(err.message); busy(false); }
+}
 async function undoAudio(redo) {
   const it = S.byId.get(S.sel); const p = editPlayer(); if (!it || !p) return;
   const f = p.file; const sel = p.sel;

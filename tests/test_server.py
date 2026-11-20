@@ -364,6 +364,74 @@ class CompareRule(unittest.TestCase):
                                               {"f0": 300, "lufs": -20, "dur": 2})), 1)
 
 
+class Echo(unittest.TestCase):
+    """Echo: same length, same loudness of the words, an audible tail; region only; range check; undo."""
+
+    def setUp(self):
+        import agents
+        self.ff = agents.FFMPEG
+        self.d = tempfile.mkdtemp()
+        self.src = os.path.join(self.d, "src.wav")
+        # 1 s tone burst + 1.5 s silence, so the echo tail has room
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i",
+                        "sine=frequency=300:duration=1:sample_rate=48000", "-af", "volume=0.3,apad=pad_dur=1.5",
+                        "-ac", "1", "-c:a", "pcm_s16le", self.src], check=True)
+
+    def tearDown(self):
+        shutil.rmtree(self.d, ignore_errors=True)
+
+    def rms(self, f, a, b):
+        import echo
+        return echo._rms(self.ff, f, a, b)
+
+    def test_whole_file(self):
+        import agents
+        import echo
+        out = os.path.join(self.d, "out.wav")
+        echo.add(self.ff, self.src, out, 40, 1.0, total=2.5)
+        self.assertAlmostEqual(agents._duration(out), agents._duration(self.src), delta=0.01)
+        self.assertAlmostEqual(self.rms(out, 0.1, 0.9), self.rms(self.src, 0.1, 0.9), delta=1.5)
+        self.assertLess(self.rms(self.src, 1.2, 1.5), -100)          # silence before
+        self.assertGreater(self.rms(out, 1.2, 1.5), -60)             # audible tail after
+
+    def test_more_amount_longer_tail(self):
+        import echo
+        a, b = os.path.join(self.d, "a.wav"), os.path.join(self.d, "b.wav")
+        echo.add(self.ff, self.src, a, 15, 0.5, total=2.5)
+        echo.add(self.ff, self.src, b, 70, 2.0, total=2.5)
+        self.assertGreater(self.rms(b, 1.4, 1.8), self.rms(a, 1.4, 1.8) + 10)
+
+    def test_region_only(self):
+        import echo
+        out = os.path.join(self.d, "r.wav")
+        echo.add(self.ff, self.src, out, 60, 0.4, start=0.6, end=1.0, total=2.5)
+        self.assertAlmostEqual(self.rms(out, 0.1, 0.5), self.rms(self.src, 0.1, 0.5), delta=0.3)   # before region untouched
+        self.assertGreater(self.rms(out, 1.05, 1.3), -70)
+
+    def test_range_checked(self):
+        import echo
+        with self.assertRaises(ValueError):
+            echo.add(self.ff, self.src, os.path.join(self.d, "x.wav"), 0, 1)
+        with self.assertRaises(ValueError):
+            echo.add(self.ff, self.src, os.path.join(self.d, "x.wav"), 30, 9)
+
+
+class EchoApi(unittest.TestCase):
+    def test_echo_and_undo(self):
+        s = Server("noop")
+        try:
+            st, r = s.post("/api/audio-edit?p=" + s.pid, {"f": "grp/01_a/ua.wav", "op": "echo", "amount": 30, "tail": 1})
+            self.assertEqual(st, 200, r)
+            self.assertEqual(r["info"]["history"]["undo"], 1)
+            st, r = s.post("/api/audio-edit?p=" + s.pid, {"f": "grp/01_a/ua.wav", "op": "echo", "amount": 300, "tail": 1})
+            self.assertEqual(st, 400)
+            st, h = s.post("/api/audio-undo?p=" + s.pid, {"f": "grp/01_a/ua.wav"})
+            self.assertEqual(st, 200)
+            self.assertEqual(h["history"]["undo"], 0)
+        finally:
+            s.close()
+
+
 class Pitch(unittest.TestCase):
     def test_pitch_of_tones(self):
         import agents

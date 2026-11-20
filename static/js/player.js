@@ -38,7 +38,7 @@ class Player {
         <button class="pri" data-a="norm" title="Підігнати гучність шматка під те саме місце в англійській">Нормалізувати</button>
         <button data-a="-1" title="Тихіше на 1 дБ">−1 дБ</button><button data-a="+1" title="Гучніше на 1 дБ">+1 дБ</button>
         <button data-a="-3">−3</button><button data-a="+3">+3</button>
-        <button data-a="t-5" title="Стиснути шматок на 5 % (швидше), висота та сама">Коротше 5%</button><button data-a="t+5" title="Розтягнути шматок на 5 % (повільніше), висота та сама">Довше 5%</button>
+        <button data-a="echo" title="Додати луну до шматка (сила й хвіст — з рядка «Луна»)">Луна</button><button data-a="t-5" title="Стиснути шматок на 5 % (швидше), висота та сама">Коротше 5%</button><button data-a="t+5" title="Розтягнути шматок на 5 % (повільніше), висота та сама">Довше 5%</button>
         <button class="x" data-a="clear" title="Зняти виділення (Esc)">✕</button></div>` : ""}`;
     this.btn = el.querySelector(".play"); this.canvas = el.querySelector("canvas"); this.time = el.querySelector(".ptime");
     this.bar = el.querySelector(".selbar");
@@ -47,6 +47,7 @@ class Player {
       const it = S.byId.get(this.itemId); const a = b.dataset.a;
       if (a === "clear") this.setSel(null);
       else if (a === "norm") editAudio(it, "normalize");
+      else if (a === "echo") editEcho(it);
       else if (a.startsWith("t")) editTempo(it, { pct: Number(a.slice(1)) });
       else editAudio(it, "gain", Number(a));
     });
@@ -194,7 +195,12 @@ function renderDetail() {
       <input type="number" id="tempoPct" step="1" min="-40" max="80" value="0" title="На скільки відсотків змінити довжину: мінус — коротше (швидше), плюс — довше (повільніше). Висота голосу не змінюється">%
       <button class="btn" id="tempoBtn" title="Змінити темп без зміни висоти голосу (весь файл або виділений шматок)">Змінити темп</button>
       <button class="btn" id="fitBtn" title="Стиснути чи розтягнути весь файл до довжини еталона, без зміни висоти голосу">Довжина як в еталоні</button>
-      <span class="hint" id="tempoHint"></span></div>` : ""}
+      <span class="hint" id="tempoHint"></span></div>
+    <div class="vol-row tempo-row"><span>Луна:</span>
+      <input type="number" id="echoAmt" step="5" min="1" max="100" value="${esc(ls.get("echoAmt") || 30)}" title="Сила луни, %: 10 — ледь чутно, 30 — кімната, 70 — великий зал">%
+      <span>хвіст</span><input type="number" id="echoTail" step="0.1" min="0.1" max="4" value="${esc(ls.get("echoTail") || 1)}" title="За скільки секунд луна згасає">с
+      <button class="btn" id="echoBtn" title="Додати луну до всього файлу або до виділеного шматка; гучність слів лишається тією самою">Додати луну</button>
+      <span class="hint">⌘Z — прибрати</span></div>` : ""}
     <div class="section-label">Коментар</div>
     <textarea class="comment" id="comment" placeholder="Що не так? Наприклад: наголос у слові…, тон не той, пауза задовга…" spellcheck="true"></textarea>
     <div class="status-bar under">${Object.entries(STATUS).map(([k, s]) =>
@@ -223,6 +229,8 @@ function renderDetail() {
   const vb = $("volBtn"); if (vb) vb.onclick = () => changeVolume(it);
   const tb = $("tempoBtn"); if (tb) tb.onclick = () => { const v = Math.round(Number($("tempoPct").value)); if (!v) { toast("Вкажи, на скільки відсотків змінити довжину (наприклад -10 або 15)"); $("tempoPct").focus(); return; } editTempo(it, { pct: v }); };
   const fb = $("fitBtn"); if (fb) fb.onclick = () => editTempo(it, { fit: true });
+  const eb = $("echoBtn"); if (eb) eb.onclick = () => editEcho(it);
+  ["echoAmt", "echoTail"].forEach((id) => { const x = $(id); if (x) x.addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); editEcho(it); } }); });
   const tp = $("tempoPct"); if (tp) tp.addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); $("tempoBtn").click(); } });
   const nb = $("normBtn"); if (nb) nb.onclick = () => editAudio(it, "normalize");
   const sc = $("selClear"); if (sc) sc.onclick = () => { const p = editPlayer(); if (p) p.setSel(null); };
