@@ -60,9 +60,11 @@ python3 tempo.py in.wav out.wav --speed 0.9 --start 1 --end 2.5 # only that regi
 
 ## Dictation
 
-The “Диктувати” button next to the comment (or the D key) starts macOS dictation in the comment field when
-running in ByEar.app; in a browser, press Fn twice. Turn dictation on once in System Settings → Keyboard →
-Dictation and pick the language. Recognition is done by macOS, so the agent simply gets the text.
+The “Диктувати” button next to the comment (or the D key) records your voice and a **local Whisper**
+(whisper.cpp `whisper-cli` + a multilingual ggml model in `~/.cache/whisper/`) turns it into text at the cursor.
+Nothing leaves the machine. Without Whisper the button is disabled; hovering it explains why and links to the
+install guide at `/docs/whisper.html` (`static/docs/`). Settings: `dictation_lang` (default `uk`),
+`whisper_model`, `dictation_prompt` (names Whisper should spell right).
 
 ## Echo
 

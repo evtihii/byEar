@@ -41,6 +41,9 @@ DEFAULT_SETTINGS = {
     "timeout_min": 25,               # максимум хвилин на одну правку
     "max_job_tokens": 1000000,       # ліміт токенів на одну правку (0 — без ліміту)
     "port": 8765,                    # порт сервера (і ByEar.app); змінна PORT має перевагу
+    "dictation_lang": "uk",          # мова диктування (Whisper)
+    "whisper_model": "",             # шлях до моделі Whisper; порожньо — знайти найкращу в ~/.cache/whisper
+    "dictation_prompt": "",          # підказка Whisper: імена й терміни, які треба писати правильно
 }
 OBSOLETE = ("workers", "reset_after")
 TOOLS = "Bash,Read,Write,Edit,Glob,Grep"

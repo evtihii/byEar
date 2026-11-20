@@ -1,7 +1,7 @@
 /* ByEar (наСлух) — головна сторінка.
    Звичайний (не модульний) скрипт: файли static/js/* вантажаться по черзі й ділять глобальну область. */
 /* ---------- головна сторінка ---------- */
-const DOCS_URL = "";   // посилання на документацію — поки порожнє
+const DOCS_URL = "/docs/";   // документація: static/docs/
 function renderHome() {
   const last = ls.get("lastProject");
   const cards = S.projects.map((p) => `

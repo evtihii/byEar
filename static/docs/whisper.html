@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Диктування з Whisper</title>
+<style>
+:root { --bg: #f6f6f7; --card: #fff; --text: #1d1d1f; --text2: #555; --text3: #888; --accent: #0a84ff; --sep: #e2e2e5;
+  --code: #f0f0f3; --ok: #1f9d55; --warn: #c27c0e; }
+@media (prefers-color-scheme: dark) { :root { --bg: #1c1c1e; --card: #2a2a2d; --text: #f2f2f7; --text2: #b0b0b5; --text3: #8a8a8f;
+  --accent: #4aa3ff; --sep: #3a3a3d; --code: #1f1f22; --ok: #4cd07d; --warn: #f0b04a; } }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+main { max-width: 760px; margin: 0 auto; padding: 40px 20px 60px; }
+h1 { font-size: 28px; letter-spacing: -.02em; margin: 0 0 6px; }
+.lead { color: var(--text2); margin: 0 0 28px; }
+h2 { font-size: 18px; margin: 34px 0 10px; }
+.card { background: var(--card); border: 1px solid var(--sep); border-radius: 12px; padding: 16px 18px; margin: 12px 0; }
+.step { display: flex; gap: 14px; }
+.n { flex: none; width: 28px; height: 28px; border-radius: 50%; background: var(--accent); color: #fff; font-weight: 700;
+  display: grid; place-items: center; font-size: 14px; margin-top: 2px; }
+.step h3 { margin: 0 0 6px; font-size: 16px; }
+.step > div:last-child { flex: 1; min-width: 0; }
+pre { background: var(--code); border: 1px solid var(--sep); border-radius: 8px; padding: 10px 12px; overflow-x: auto;
+  font: 13px/1.5 ui-monospace, Menlo, monospace; margin: 8px 0; white-space: pre; }
+code { font: 13px ui-monospace, Menlo, monospace; background: var(--code); padding: 1px 5px; border-radius: 4px; }
+pre code { background: none; padding: 0; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--sep); vertical-align: top; }
+th { color: var(--text3); font-weight: 600; font-size: 12px; }
+.ok { color: var(--ok); font-weight: 600; }
+.note { color: var(--text2); font-size: 14px; }
+.warn { border-left: 3px solid var(--warn); }
+#status { font-weight: 600; }
+a { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Диктування з Whisper</h1>
+  <p class="lead">Кнопка «Диктувати» біля коментаря записує твій голос і перетворює його на текст. Розпізнає
+    <b>Whisper</b> — модель, що працює прямо на цьому Mac: запис нікуди не надсилається, інтернет не потрібен, нічого не коштує.</p>
+
+  <div class="card" id="statusCard">Стан на цьому Mac: <span id="status">перевіряю…</span></div>
+
+  <h2>Що потрібно</h2>
+  <p>Дві речі: програма <code>whisper-cli</code> (з проєкту whisper.cpp) і <b>багатомовна</b> модель Whisper.
+    Англійські моделі (назва закінчується на <code>.en.bin</code>) українську не розпізнають.</p>
+
+  <div class="card step"><div class="n">1</div><div>
+    <h3>Встановити whisper.cpp</h3>
+    <p>Через <a href="https://brew.sh" target="_blank" rel="noopener">Homebrew</a>, у Терміналі:</p>
+    <pre><code>brew install whisper-cpp</code></pre>
+    <p class="note">Перевірка: <code>whisper-cli --help</code> має вивести довідку.</p>
+  </div></div>
+
+  <div class="card step"><div class="n">2</div><div>
+    <h3>Завантажити модель</h3>
+    <p>Рекомендована — <b>large-v3-turbo (q5_0)</b>: добре розпізнає українську, швидка на Apple Silicon, ≈ 550 МБ.</p>
+    <pre><code>mkdir -p ~/.cache/whisper
+curl -L -o ~/.cache/whisper/ggml-large-v3-turbo-q5_0.bin \
+  https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin</code></pre>
+    <p class="note">наСлух сам шукає моделі в <code>~/.cache/whisper/</code> і бере найкращу з тих, що знайде.</p>
+  </div></div>
+
+  <div class="card step"><div class="n">3</div><div>
+    <h3>Оновити наСлух</h3>
+    <p>Натисни <b>⌘R</b> у вікні наСлуху — кнопка «Диктувати» стане активною. Під час першого запису macOS спитає
+      дозвіл на мікрофон: натисни «Дозволити».</p>
+  </div></div>
+
+  <h2>Як диктувати</h2>
+  <div class="card">
+    <p>Натисни <b>🎙 Диктувати</b> (або клавішу <b>D</b>) і говори. Кнопка стане червоною й показуватиме час.
+      Натисни ще раз — запис зупиниться, за кілька секунд текст з'явиться в коментарі там, де стоїть курсор.
+      Його можна підправити й відправити агенту, як звичайно. Один запис — до 2 хвилин.</p>
+  </div>
+
+  <h2>Інші моделі</h2>
+  <table>
+    <tr><th>Модель (файл)</th><th>Розмір</th><th>Українська</th><th>Швидкість</th></tr>
+    <tr><td><code>ggml-large-v3-turbo-q5_0.bin</code></td><td>≈ 550 МБ</td><td class="ok">добре</td><td>швидко · рекомендовано</td></tr>
+    <tr><td><code>ggml-large-v3-turbo.bin</code></td><td>≈ 1,6 ГБ</td><td class="ok">добре</td><td>швидко</td></tr>
+    <tr><td><code>ggml-large-v3.bin</code></td><td>≈ 3,1 ГБ</td><td class="ok">найкраще</td><td>повільніше</td></tr>
+    <tr><td><code>ggml-small.bin</code></td><td>≈ 470 МБ</td><td>помітні помилки</td><td>дуже швидко</td></tr>
+  </table>
+  <p class="note">Будь-яку з них завантажуй тією самою командою, замінивши назву файлу. Усі моделі — на
+    <a href="https://huggingface.co/ggerganov/whisper.cpp/tree/main" target="_blank" rel="noopener">huggingface.co/ggerganov/whisper.cpp</a>.</p>
+
+  <h2>Налаштування</h2>
+  <p>У файлі <code>settings.json</code> поруч із наСлухом:</p>
+  <table>
+    <tr><th>Поле</th><th>Що робить</th></tr>
+    <tr><td><code>dictation_lang</code></td><td>Мова диктування, за замовчуванням <code>"uk"</code>.</td></tr>
+    <tr><td><code>whisper_model</code></td><td>Шлях до конкретної моделі, якщо не хочеш, щоб наСлух вибирав сам.</td></tr>
+    <tr><td><code>dictation_prompt</code></td><td>Підказка: імена й слова, які Whisper має писати правильно, наприклад
+      <code>"Хінако, Сю, Сакуко, Рінко, Кото, Дзюнко"</code>.</td></tr>
+  </table>
+
+  <h2>Якщо не працює</h2>
+  <div class="card warn">
+    <p><b>Кнопка неактивна.</b> Наведи на неї — підказка скаже причину: немає <code>whisper-cli</code> або знайдено лише
+      англійську модель. Після встановлення натисни ⌘R.</p>
+    <p><b>«Немає доступу до мікрофона».</b> Системні параметри → Приватність і безпека → Мікрофон → увімкни наСлух
+      (або браузер, якщо відкриваєш наСлух у ньому).</p>
+    <p><b>Розпізнає не тією мовою.</b> Перевір <code>dictation_lang</code> у <code>settings.json</code> і що модель не <code>.en.bin</code>.</p>
+    <p><b>Плутає імена.</b> Допиши їх у <code>dictation_prompt</code>.</p>
+  </div>
+</main>
+<script>
+fetch("/api/dictation").then((r) => r.json()).then((d) => {
+  const s = document.getElementById("status");
+  if (d.available) { s.textContent = `готово — модель ${d.model_name}, мова ${d.lang}`; s.style.color = "var(--ok)"; }
+  else { s.textContent = d.reason || "недоступно"; s.style.color = "var(--warn)"; }
+}).catch(() => { document.getElementById("status").textContent = "наСлух не запущено"; });
+</script>
+</body>
+</html>

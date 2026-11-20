@@ -273,7 +273,17 @@ svg { display: block; }
 .comment-head { display: flex; align-items: center; gap: 8px; }
 .dict-btn { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; font: inherit; font-size: 12px; font-weight: 500;
   height: 24px; padding: 0 10px; border-radius: 12px; border: 1px solid var(--field-border); background: var(--field); color: var(--text); cursor: default; }
-.dict-btn:hover { border-color: var(--accent); color: var(--accent); }
+.dict-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.dict-btn:disabled { opacity: .45; }
+.dict-btn.rec { background: var(--red); border-color: transparent; color: #fff; font-variant-numeric: tabular-nums; }
+.dict-wrap { margin-left: auto; position: relative; display: inline-flex; }
+.dict-tip { display: none; position: absolute; right: 0; top: calc(100% + 6px); z-index: 30; width: 270px; padding: 10px 12px;
+  border-radius: 9px; background: var(--window); border: 1px solid var(--sep); box-shadow: 0 8px 24px rgba(0,0,0,.25);
+  font-size: 12px; font-weight: 400; color: var(--text2); line-height: 1.45; white-space: normal; }
+.dict-tip:empty { display: none !important; }
+.dict-wrap:hover .dict-tip { display: block; }
+.dict-tip::before { content: ""; position: absolute; left: 0; right: 0; top: -8px; height: 8px; }   /* місток, щоб курсор дійшов до посилання */
+.dict-tip a { color: var(--accent); font-weight: 600; text-decoration: none; }
 .grp-label { font-size: 11px; font-weight: 600; color: var(--text3); margin: 0 0 6px 2px; letter-spacing: .02em; }
 .grp-label.tr { margin-top: 4px; color: var(--accent); }
 .players.src { margin-bottom: 8px; }

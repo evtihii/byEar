@@ -24,7 +24,7 @@ func serverPort() -> Int {
 let port = serverPort()
 let baseURL = URL(string: "http://localhost:\(port)/")!
 
-final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNavigationDelegate, WKScriptMessageHandler {
+final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNavigationDelegate {
     var window: NSWindow!
     var web: WKWebView!
     var server: Process?
@@ -35,7 +35,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
         let cfg = WKWebViewConfiguration()
         cfg.mediaTypesRequiringUserActionForPlayback = []
         cfg.websiteDataStore = .default()                 // localStorage між запусками
-        cfg.userContentController.add(self, name: "byear")   // команди сторінки: {action: "dictate"}
         web = WKWebView(frame: .zero, configuration: cfg)
         web.uiDelegate = self
         web.navigationDelegate = self
@@ -132,25 +131,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
         if p.isRunning { kill(p.processIdentifier, SIGKILL) }
     }
 
-    // ---------- команди сторінки ----------
-    func userContentController(_ c: WKUserContentController, didReceive m: WKScriptMessage) {
-        guard let d = m.body as? [String: Any], let action = d["action"] as? String else { return }
-        if action == "dictate" { dictate(nil) }
-    }
-
-    // Системне диктування macOS у полі, де стоїть курсор (те саме, що двічі Fn)
-    @objc func dictate(_ s: Any?) {
-        window.makeKeyAndOrderFront(nil)
-        window.makeFirstResponder(web)
-        NSApp.activate(ignoringOtherApps: true)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-            if !NSApp.sendAction(Selector(("startDictation:")), to: nil, from: self) {
-                let a = NSAlert()
-                a.messageText = "Не вдалося запустити диктування"
-                a.informativeText = "Увімкни його: Системні параметри → Клавіатура → Диктування (і вибери українську мову)."
-                a.beginSheetModal(for: self.window) { _ in }
-            }
-        }
+    // ---------- мікрофон для диктування (запис у сторінці → Whisper на сервері) ----------
+    @available(macOS 12.0, *)
+    func webView(_ w: WKWebView, requestMediaCapturePermissionFor origin: WKSecurityOrigin,
+                 initiatedByFrame f: WKFrameInfo, type: WKMediaCaptureType,
+                 decisionHandler: @escaping (WKPermissionDecision) -> Void) {
+        let local = origin.host == "localhost" || origin.host == "127.0.0.1"
+        decisionHandler(local && type == .microphone ? .grant : .deny)
     }
 
     // ---------- WebKit: діалоги, посилання ----------
@@ -221,8 +208,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
             item("Копіювати", #selector(NSText.copy(_:)), "c"),
             item("Вставити", #selector(NSText.paste(_:)), "v"),
             item("Виділити все", #selector(NSText.selectAll(_:)), "a"),
-            .separator(),
-            item("Почати диктування", #selector(dictate(_:)), "d", [.command, .option]),
         ])
         sub("Вигляд", [
             item("Оновити сторінку", #selector(reloadPage(_:)), "r"),

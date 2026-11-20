@@ -48,6 +48,8 @@ Ideas for later: planned ahead, not implemented yet unless checked.
   `tempo.py` also works from the command line. Higher quality (rubberband) if ffmpeg is built with it.
 - [x] **Echo with two knobs** (2026-11-20): amount and tail, whole file or region, loudness kept; `echo.py` CLI.
 - [ ] Estimate the echo of the reference (tail length/level after speech) and offer “echo like EN”.
+- [x] **Dictation with local Whisper** (2026-11-20): record in the page, whisper.cpp on the server, text into the
+  comment; disabled with a tooltip + install guide (`/docs/whisper.html`) when Whisper is missing.
 - [ ] Detect original audio pasted into the translation (e.g. English breaths) — needs audio fingerprinting.
 
 ## Settings page
