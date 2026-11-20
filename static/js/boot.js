@@ -1,7 +1,7 @@
 /* Holosii (Голосій) — кнопки панелей і старт.
    Звичайний (не модульний) скрипт: файли static/js/* вантажаться по черзі й ділять глобальну область. */
 /* ---------- кнопки панелей ---------- */
-$("appIcon").innerHTML = I.headphones; $("queueIcon").innerHTML = I.queue;
+$("appIcon").innerHTML = I.logo; $("queueIcon").innerHTML = I.queue;
 $("backIcon").innerHTML = I.back; $("projIcon").innerHTML = I.back; $("homeIcon").innerHTML = I.house;
 $("railAgIcon").innerHTML = I.spark; $("compactIcon").innerHTML = I.compress; $("restartIcon").innerHTML = I.restart;
 $("searchIcon").innerHTML = I.search;

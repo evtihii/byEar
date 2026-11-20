@@ -22,7 +22,7 @@ function renderHome() {
       ${p.last_change ? `<div class="pp">Остання позначка: ${esc(fdate(p.last_change))}</div>` : ""}
     </div>`).join("");
   $("home").innerHTML = `<div class="home-in">
-    <div class="home-top"><div class="big-icon">${I.headphones.replace('width="13" height="13"', 'width="30" height="30"')}</div>
+    <div class="home-top"><div class="big-icon">${I.logo.replace('width="16" height="16"', 'width="38" height="38"')}</div>
       <div><h1>Голосій</h1><p>Holosii — прослуховування й правка озвучки ігор</p></div><span class="grow"></span>
       <button class="btn qlink" id="homeQueue" title="Черга правок агента">${I.queue} Черга${queueCountHtml()}</button>
       <a class="doc-link ${DOCS_URL ? "on" : ""}" ${DOCS_URL ? `href="${DOCS_URL}" target="_blank" rel="noopener"` : 'title="Документація ще не готова"'}>${I.book} Документація</a></div>
