@@ -43,6 +43,11 @@ Project fields:
   generation cost; the remaining credits appear on the left rail. API keys stay in the project — ByEar
   never reads them.
 
+The left rail also shows the **Claude plan limits**: how much of the 5-hour window is used (big number) and of
+the week (below), with reset times in the tooltip. ByEar takes them from Claude Code's own stream
+(`rate_limit_event`), so it never touches your login; click the block to refresh. Before a job is sent at
+≥ 90 % (or when a limit is reached) ByEar asks first.
+
 Audio, API keys and local data (queue, logs, edit history) never go into the repository — see `.gitignore`.
 
 ## Tempo without pitch change

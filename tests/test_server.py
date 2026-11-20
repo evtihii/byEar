@@ -220,6 +220,19 @@ class AgentJobs(unittest.TestCase):
         self.assertEqual(j["usage"]["spent"], 340)
         self.assertEqual(j["usage"]["left"], 100000 - j["usage"]["spent"] - (u["usage"]["used"]))
 
+    def test_claude_limits(self):
+        # the startup probe (fake agent) fills them in; a job keeps them current
+        for _ in range(50):
+            st, lim = self.s.get("/api/limits")
+            if lim.get("available"):
+                break
+            time.sleep(0.1)
+        self.assertTrue(lim["available"], lim)
+        self.assertAlmostEqual(lim["windows"]["five_hour"]["used"], 0.42)
+        self.assertIn("seven_day", lim["windows"])
+        st, r = self.s.post("/api/limits/refresh", {})
+        self.assertEqual(st, 200)
+
     def test_default_and_no_reference(self):
         st, r = self.s.post("/api/queue/add?p=" + self.s.pid, {"item": "grp/02_b", "comment": "x"})
         self.assertEqual(r["job"]["ref"], "en")

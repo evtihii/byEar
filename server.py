@@ -438,6 +438,9 @@ class Handler(BaseHTTPRequestHandler):
                 if not p:
                     return self.error("Проєкт не знайдено", 404)
                 self.send_json({"usage": agents.project_usage(p, fresh=q.get("fresh") == "1")})
+            elif path == "/api/limits":
+                # ліміти плану Claude (5 год / тиждень), останні відомі
+                self.send_json(agents.claude_limits())
             elif path == "/api/dictation":
                 # чи доступне диктування (локальний Whisper) і чому ні
                 self.send_json(dictation.status(agents.load_settings()))
@@ -611,6 +614,8 @@ class Handler(BaseHTTPRequestHandler):
             elif path == "/api/queue/retry":
                 j = agents.retry_job(str(data.get("id")))
                 self.send_json({"ok": bool(j), "job": j})
+            elif path == "/api/limits/refresh":
+                self.send_json({"ok": agents.refresh_limits()})
             elif path == "/api/agent/compact":
                 if agents.AGENT.ctx is None or not agents.AGENT.alive():
                     return self.error("Агент ще нічого не робив — стискати нічого")
@@ -736,6 +741,9 @@ def main():
     if not os.path.exists(PROJECTS_FILE):
         save_projects([])
     agents.start_workers(find_project, TARGET_TAGS, SOURCE_TAGS)
+    lim = agents.claude_limits()
+    if not lim.get("available") or time.time() - (lim.get("seen") or 0) > 3600:
+        agents.refresh_limits()                      # ліміти Claude застаріли — дізнатися у фоні
     print(f"наСлух працює: {url}")
     print("Щоб зупинити — закрийте це вікно або натисніть Ctrl+C.")
     if "--no-open" not in sys.argv:

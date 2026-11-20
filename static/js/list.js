@@ -170,6 +170,7 @@ function setStatus(st) {
 async function enqueue(id, comment) {
   const p = S.projects.find((x) => x.id === S.pid);
   if (!p || !p.agent) { toast("Позначено «Виправити». Агент для цього проєкту не налаштований"); return; }
+  if (!limitsOk()) { toast("Не відправлено — позначка «Виправити» лишилась"); return; }
   try {
     const it = S.byId.get(id);
     const r = await api("/api/queue/add?p=" + encodeURIComponent(S.pid), { item: id, comment, ref: (it && effRef(it)) || "none" });

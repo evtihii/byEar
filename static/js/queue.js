@@ -152,6 +152,71 @@ async function loadUsage(fresh) {
     + (u.reset ? `\nЛіміт оновиться ${new Date(u.reset * 1000).toLocaleDateString("uk-UA", { day: "numeric", month: "long" })}` : "");
 }
 setInterval(() => loadUsage(false), 5 * 60 * 1000);
+/* ---------- ліміти плану Claude (5-годинне й тижневе вікно) — на лівій смужці ---------- */
+const LIM_NAMES = { five_hour: "5 годин", seven_day: "тиждень", seven_day_opus: "тиждень · Opus", seven_day_sonnet: "тиждень · Sonnet" };
+function limWhen(t) {
+  if (!t) return "";
+  const d = new Date(t * 1000), now = new Date(), mins = Math.round((d - now) / 60000);
+  if (mins < 60) return `через ${Math.max(1, mins)} хв`;
+  const hm = d.toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit" });
+  if (d.toDateString() === now.toDateString()) return `о ${hm}`;
+  if (d.toDateString() === new Date(now.getTime() + 864e5).toDateString()) return `завтра о ${hm}`;
+  return d.toLocaleDateString("uk-UA", { weekday: "short", day: "numeric", month: "short" }) + ` о ${hm}`;
+}
+function limWorst(l) {
+  if (!l || !l.available) return null;
+  let w = null;
+  for (const [k, v] of Object.entries(l.windows || {})) if (!w || v.used > w.used || v.status === "rejected") w = { ...v, key: k };
+  return w;
+}
+async function loadLimits() {
+  const box = $("railLim"); if (!box) return;
+  let l = null;
+  try { l = await api("/api/limits"); } catch {}
+  S.limits = l;
+  if (!l || !l.claude) { box.hidden = true; return; }
+  box.hidden = false;
+  box.classList.toggle("busy", !!l.refreshing);
+  if (!l.available) {
+    $("railLimNum").textContent = "?"; $("railLimWeek").textContent = ""; $("railLimFill").style.width = "0";
+    box.title = l.refreshing ? "Claude: дізнаюся ліміти…" : "Claude: ліміти ще невідомі — з'являться після першої правки.\nКлік — дізнатися зараз.";
+    return;
+  }
+  const w = l.windows || {}, f = w.five_hour, wk = w.seven_day;
+  const pct = (v) => Math.round((v || 0) * 100) + "%";
+  const top = f || limWorst(l);
+  $("railLimNum").textContent = pct(top.used);
+  $("railLimFill").style.width = Math.min(100, Math.round(top.used * 100)) + "%";
+  $("railLimWeek").textContent = wk ? `тиж. ${pct(wk.used)}` : "";
+  const worst = limWorst(l).used;
+  box.classList.toggle("high", worst >= 0.9 || l.status === "rejected");
+  box.classList.toggle("mid", worst >= 0.7 && worst < 0.9 && l.status !== "rejected");
+  const lines = ["Ліміти плану Claude (використано):"];
+  for (const [k, v] of Object.entries(w)) {
+    lines.push(`• ${LIM_NAMES[k] || k}: ${pct(v.used)}` + (v.stale ? " — вікно вже скинулось" : v.resets ? ` · скинеться ${limWhen(v.resets)}` : "")
+      + (v.status === "rejected" ? " · ВИЧЕРПАНО" : ""));
+  }
+  if (l.seen) lines.push(`\nДані на ${new Date(l.seen * 1000).toLocaleString("uk-UA", { hour: "2-digit", minute: "2-digit", day: "numeric", month: "short" })}. Клік — оновити.`);
+  box.title = lines.join("\n");
+}
+/* перед відправкою агенту: попередити, коли ліміту майже немає */
+function limitsOk() {
+  const w = limWorst(S.limits);
+  if (!w) return true;
+  if (S.limits.status === "rejected" || w.status === "rejected")
+    return confirm(`Ліміт Claude (${LIM_NAMES[w.key] || w.key}) вичерпано${w.resets ? ", скинеться " + limWhen(w.resets) : ""}.\nАгент, найімовірніше, не зможе працювати. Все одно поставити в чергу?`);
+  if (w.used >= 0.9)
+    return confirm(`Ліміт Claude (${LIM_NAMES[w.key] || w.key}) використано на ${Math.round(w.used * 100)}%${w.resets ? ", скинеться " + limWhen(w.resets) : ""}.\nПравка може не встигнути. Відправити агенту?`);
+  return true;
+}
+document.addEventListener("click", async (e) => {
+  if (!e.target.closest("#railLim")) return;
+  try { await api("/api/limits/refresh", {}); } catch {}
+  $("railLim").classList.add("busy");
+  setTimeout(loadLimits, 5000); setTimeout(loadLimits, 12000);
+});
+loadLimits();
+setInterval(loadLimits, 60 * 1000);
 /* ---------- випадкове «Виправити»: прибрати фразу з черги прямо з картки ---------- */
 document.addEventListener("click", async (e) => {
   const b = e.target.closest("[data-jobcancel]"); if (!b) return;
@@ -221,7 +286,7 @@ async function refreshQueue(force) {
   }
   if (!changed && !force) { if (S.view === "queue") refreshLog(); return; }
   const finishedHere = S.jobs.some((j) => j.pid === S.pid && (j.status === "done" || j.status === "error") && prev.get(j.id) !== j.status);
-  if (finishedHere) { S.needReload = true; refreshIfChanged(); loadUsage(true); }
+  if (finishedHere) { S.needReload = true; refreshIfChanged(); loadUsage(true); loadLimits(); }
   if (S.view === "queue") { renderQueueList(); renderJobDetail(); return; }
   for (const j of S.jobs) if (j.pid === S.pid && (prev.get(j.id) !== j.status)) updateRow(j.item);
   renderJobInfo();
