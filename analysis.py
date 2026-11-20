@@ -92,13 +92,19 @@ def measure(ffmpeg, measure_lufs, duration, full):
     return out
 
 
-def compare(new, ref):
-    """List of human-readable warnings (Ukrainian, shown in the UI) where `new` differs from `ref`."""
+def compare(new, ref, before=None):
+    """List of human-readable warnings (Ukrainian, shown in the UI).
+
+    Pitch is compared with the version before the edit (same voice): the reference is usually another actor
+    in another language, so its pitch says nothing about whether our voice changed. Loudness and length are
+    compared with the reference."""
     warn = []
-    if not new or not ref:
+    if not new:
         return warn
-    if new["f0"] and ref["f0"] and abs(new["f0"] - ref["f0"]) / ref["f0"] > DF0:
-        warn.append(f"висота голосу {new['f0']} Гц проти {ref['f0']} Гц в еталоні")
+    if before and new["f0"] and before["f0"] and abs(new["f0"] - before["f0"]) / before["f0"] > DF0:
+        warn.append(f"висота голосу змінилась: {new['f0']} Гц, до правки {before['f0']} Гц")
+    if not ref:
+        return warn
     if new["lufs"] is not None and ref["lufs"] is not None and abs(new["lufs"] - ref["lufs"]) > DLUFS:
         warn.append(f"гучність {new['lufs']} LUFS проти {ref['lufs']} в еталоні")
     if new["dur"] and ref["dur"] and abs(new["dur"] - ref["dur"]) / ref["dur"] > DDUR:

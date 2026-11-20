@@ -330,6 +330,35 @@ class Tempo(unittest.TestCase):
             self.assertEqual(h.get("history", h).get("undo", 0), 0)
 
 
+class CompareRule(unittest.TestCase):
+    """Pitch vs the version before the edit (same voice); loudness/length vs the reference."""
+
+    def test_other_actor_pitch_is_not_a_warning(self):
+        import analysis
+        new = {"f0": 320, "lufs": -20.0, "dur": 2.5}
+        before = {"f0": 318, "lufs": -21.0, "dur": 3.3}
+        ref = {"f0": 236, "lufs": -20.0, "dur": 2.4}          # English actress, lower voice
+        self.assertEqual(analysis.compare(new, ref, before), [])
+
+    def test_changed_voice_is_a_warning(self):
+        import analysis
+        w = analysis.compare({"f0": 409, "lufs": -20, "dur": 2.4}, {"f0": 516, "lufs": -20, "dur": 2.4},
+                             {"f0": 303, "lufs": -20, "dur": 2.4})
+        self.assertEqual(len(w), 1)
+        self.assertIn("висота", w[0])
+
+    def test_loudness_and_length_vs_reference(self):
+        import analysis
+        w = analysis.compare({"f0": 300, "lufs": -27, "dur": 3.5}, {"f0": 200, "lufs": -20, "dur": 2.5},
+                             {"f0": 300, "lufs": -27, "dur": 3.5})
+        self.assertEqual(len(w), 2)
+
+    def test_without_reference_only_pitch(self):
+        import analysis
+        self.assertEqual(len(analysis.compare({"f0": 450, "lufs": -40, "dur": 9}, None,
+                                              {"f0": 300, "lufs": -20, "dur": 2})), 1)
+
+
 class Pitch(unittest.TestCase):
     def test_pitch_of_tones(self):
         import agents

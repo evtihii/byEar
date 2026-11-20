@@ -148,21 +148,22 @@ document.addEventListener("click", async (e) => {
 function checkHtml(j) {
   const c = j.check; if (!c) return "";
   if (c.changed === false) return `<div class="chk">Агент файл не змінив.</div>`;
-  const row = (name, m, ref) => {
-    if (!m) return "";
-    const d = (k, unit, rel, tol) => {
-      const v = m[k]; if (v == null) return "<td>—</td>";
-      const r = ref && ref[k]; const bad = r != null && m !== ref && (rel ? Math.abs(v - r) / r > tol : Math.abs(v - r) > tol);
-      return `<td class="${bad ? "bad" : ""}">${v}${unit}</td>`;
-    };
-    return `<tr><td>${name}</td>${d("f0", " Гц", true, 0.2)}${d("lufs", " LUFS", false, 3)}${d("dur", " с", true, 0.15)}</tr>`;
+  const ref = c.ref, bef = c.before; const rl = (c.ref_lang || "").toUpperCase();
+  // висота — проти версії до правки (той самий голос); гучність і довжина — проти еталона
+  const base = { f0: bef, lufs: ref, dur: ref };
+  const cell = (m, k, unit, rel, tol, isNew, dim) => {
+    const v = m && m[k]; if (v == null) return "<td>—</td>";
+    const b = isNew && base[k] && base[k][k];
+    const bad = b != null && (rel ? Math.abs(v - b) / b > tol : Math.abs(v - b) > tol);
+    return `<td class="${bad ? "bad" : ""}${dim ? " dim" : ""}"${dim ? ' title="Інший актор — висота лише для довідки"' : ""}>${v}${unit}</td>`;
   };
-  const ref = c.ref; const rl = (c.ref_lang || "").toUpperCase();
+  const row = (name, m, isNew, refRow) => m ? `<tr><td>${name}</td>${cell(m, "f0", " Гц", true, 0.2, isNew, refRow)}${cell(m, "lufs", " LUFS", false, 3, isNew)}${cell(m, "dur", " с", true, 0.15, isNew)}</tr>` : "";
   const w = c.warnings || [];
+  const okText = ref ? "Висота як до правки; гучність і довжина близькі до еталона." : "Висота як до правки. Еталона не було — гучність і довжину ні з чим не порівнювала.";
   return `<div class="chk">
-    <table><tr><th></th><th>висота</th><th>гучність</th><th>довжина</th></tr>
-      ${row("Нова версія", c.new, ref)}${row("До правки", c.before, ref)}${ref ? row("Еталон " + esc(rl), ref, null) : ""}</table>
-    ${ref ? (w.length ? `<div class="warn">Помітна різниця з еталоном: ${esc(w.join("; "))}.</div>` : `<div class="ok">Висота, гучність і довжина близькі до еталона.</div>`) : "<div>Еталона не було — порівняння лише з версією до правки.</div>"}
+    <table><tr><th></th><th title="Порівнюється з версією до правки">висота</th><th title="Порівнюється з еталоном">гучність</th><th title="Порівнюється з еталоном">довжина</th></tr>
+      ${row("Нова версія", c.new, true)}${row("До правки", bef)}${ref ? row("Еталон " + esc(rl), ref, false, true) : ""}</table>
+    ${w.length ? `<div class="warn">Помітна різниця: ${esc(w.join("; "))}.</div>` : `<div class="ok">${okText}</div>`}
     ${j.before_file ? `<div class="acts"><button data-before="${esc(j.id)}">▶ До правки</button><span>⌘Z — повернути версію до правки</span></div>` : ""}
   </div>`;
 }

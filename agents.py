@@ -624,7 +624,7 @@ def _after_job(job, project, tfull, before):
         if os.path.isfile(rf):
             out["ref"] = m(rf)
             out["ref_lang"] = job.get("ref")
-            out["warnings"] = analysis.compare(out["new"], out["ref"])
+    out["warnings"] = analysis.compare(out["new"], out.get("ref"), out["before"])
     return out
 
 

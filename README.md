@@ -61,9 +61,11 @@ python3 tempo.py in.wav out.wav --speed 0.9 --start 1 --end 2.5 # only that regi
 ## After each agent job
 
 ByEar keeps the version the agent overwrote (“▶ До правки” plays it, ⌘Z restores it) and measures pitch,
-loudness and length of the new file against the reference and the previous version. Large differences
-(e.g. a pitch-shifted voice or a much quieter take) are flagged next to the agent's reply, together with the
-job's token count and cost. A job that goes over `max_job_tokens` is stopped.
+loudness and length of the new file, the previous version and the reference. Pitch is compared with the
+previous version (same voice; the reference is usually another actor in another language, shown greyed for
+information), loudness and length with the reference. Large differences (e.g. a pitch-shifted voice or a much
+quieter take) are flagged next to the agent's reply, together with the job's token count and cost. A job that
+goes over `max_job_tokens` is stopped.
 
 ## Settings (`settings.json`, created on first run)
 

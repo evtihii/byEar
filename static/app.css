@@ -229,6 +229,7 @@ svg { display: block; }
 .chk .bad { color: var(--orange); font-weight: 600; }
 .chk .warn { color: var(--orange); }
 .chk .ok { color: var(--green); }
+.chk .dim { color: var(--text3); }
 .chk .acts { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
 .chk .acts button { white-space: nowrap; flex: none; }
 .chk .acts button { font: inherit; font-size: 12px; height: 24px; padding: 0 10px; border-radius: 6px; border: 1px solid var(--field-border); background: var(--field); color: var(--text); cursor: default; }
