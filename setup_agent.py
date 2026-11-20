@@ -28,7 +28,14 @@ _lock = threading.Lock()
 
 
 def _dir(ws):
-    return os.path.join(ws, ".holosii")
+    d = os.path.join(ws, ".holosii")
+    old = os.path.join(ws, ".byear")                 # проєкти, створені до перейменування (наСлух / ByEar)
+    if not os.path.isdir(d) and os.path.isdir(old):
+        try:
+            os.rename(old, d)
+        except OSError:
+            return old
+    return d
 
 
 def state_path(ws):

@@ -186,7 +186,9 @@ function renderDetail() {
         ? `<div class="grp-label">ОРИГІНАЛ</div><div class="players src" id="playersSrc"></div><div class="refrow" id="refRow"></div>
            <div class="grp-label tr">ПЕРЕКЛАД · ${esc((vt.tag || "").toUpperCase())}</div><div class="players" id="players"></div>`
         : `<div class="players" id="players"></div>`; })()}
-    ${volTarget(it) ? `<div class="vol-row"><span id="selInfo">Для <span class="vt">${esc(volTarget(it).name)}</span> (потягни по хвилі, щоб виділити шматок):</span>
+    ${volTarget(it) ? `<div class="vol-row regen-row"><button class="btn" id="regenBtn" title="Відправити агенту без пояснень: новий дубль того самого тексту тим самим голосом. Якщо в коментарі щось написано — піде як уточнення">${I.regen} Перегенерувати</button>
+      <span class="hint">новий дубль того самого тексту — пояснювати нічого не треба</span></div>
+    <div class="vol-row"><span id="selInfo">Для <span class="vt">${esc(volTarget(it).name)}</span> (потягни по хвилі, щоб виділити шматок):</span>
       <input type="number" id="volDb" step="1" min="-30" max="30" value="0" title="Крок 1 дБ; мінус — тихіше"> дБ
       <button class="btn" id="volBtn">Змінити гучність</button>
       <button class="btn" id="normBtn" title="Підігнати гучність під вибраний еталон (весь файл — за LUFS, шматок — за тим самим місцем в еталоні)">Нормалізувати як EN</button>
@@ -229,6 +231,7 @@ function renderDetail() {
   const vb = $("volBtn"); if (vb) vb.onclick = () => changeVolume(it);
   const tb = $("tempoBtn"); if (tb) tb.onclick = () => { const v = Math.round(Number($("tempoPct").value)); if (!v) { toast("Вкажи, на скільки відсотків змінити довжину (наприклад -10 або 15)"); $("tempoPct").focus(); return; } editTempo(it, { pct: v }); };
   const fb = $("fitBtn"); if (fb) fb.onclick = () => editTempo(it, { fit: true });
+  const rg = $("regenBtn"); if (rg) rg.onclick = () => regenerate(it);
   const eb = $("echoBtn"); if (eb) eb.onclick = () => editEcho(it);
   const db = $("dictBtn"); if (db) db.onclick = () => startDictation();
   renderDictBtn();

@@ -454,3 +454,5 @@ textarea.comment:focus { box-shadow: 0 0 0 3px var(--accent-soft); border-color:
 .scompose { display: flex; gap: 8px; margin-top: 10px; align-items: flex-end; }
 .scompose textarea { flex: 1; resize: vertical; min-height: 44px; font: inherit; font-size: 13px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--field-border); background: var(--window); color: var(--text); }
 .home-top .qlink .badge { background: var(--orange); color: #fff; font-size: 11px; font-weight: 600; border-radius: 9px; padding: 0 6px; line-height: 17px; }
+.regen-row .btn { display: inline-flex; align-items: center; gap: 6px; }
+.regen-row .btn svg { color: var(--accent); }

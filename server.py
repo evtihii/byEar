@@ -744,7 +744,7 @@ class Handler(BaseHTTPRequestHandler):
                     return self.error("Робоча тека не може бути всередині теки гри — туди нічого не пишемо")
                 if game.startswith(ws + os.sep):
                     return self.error("Робоча тека не може містити теку гри")
-                if os.path.isdir(ws) and os.listdir(ws) and not os.path.isdir(os.path.join(ws, ".holosii")):
+                if os.path.isdir(ws) and os.listdir(ws) and not any(os.path.isdir(os.path.join(ws, x)) for x in (".holosii", ".byear")):
                     return self.error("Робоча тека вже існує і не порожня — вибери іншу: " + ws)
                 listen = os.path.join(ws, "listen")
                 with lock:
