@@ -328,3 +328,14 @@ $("folders").addEventListener("click", (e) => {
   if (S.label) { const pp = S.label.split("/"); for (let i = 1; i <= pp.length; i++) S.open[pp.slice(0, i).join("/")] = true; ls.set("open." + S.pid, S.open); }
   saveView(); renderFolders(); renderFilters(); renderList(); scrollToSel("center");
 });
+/* Значок «агент працює» створюється заново при кожному оновленні черги, і обертання починалося б з нуля —
+   звідси ривки. Кожен новий значок стає в ту саму фазу, що й годинник, тож перемальовування непомітне. */
+const SPIN_MS = 800;
+function syncSpin(el) { el.style.animationDelay = `-${Math.round(performance.now() % SPIN_MS)}ms`; }
+new MutationObserver((muts) => {
+  for (const m of muts) for (const n of m.addedNodes) {
+    if (n.nodeType !== 1) continue;
+    if (n.classList.contains("spin")) syncSpin(n);
+    n.querySelectorAll && n.querySelectorAll(".spin").forEach(syncSpin);
+  }
+}).observe(document.documentElement, { childList: true, subtree: true });
