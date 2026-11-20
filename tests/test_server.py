@@ -154,6 +154,11 @@ class SecurityAndPages(unittest.TestCase):
                             headers={"Origin": f"http://localhost:{self.s.port}"})
         self.assertEqual(st, 200)
 
+    def test_reveal_refuses_outside_and_missing(self):
+        # (valid paths would open Finder, so only the refusals are tested)
+        self.assertEqual(self.s.post("/api/reveal?p=" + self.s.pid, {"f": "../../etc"})[0], 404)
+        self.assertEqual(self.s.post("/api/reveal?p=" + self.s.pid, {"f": "grp/nope", "open": True})[0], 404)
+
     def test_config(self):
         st, c = self.s.get("/api/config")
         self.assertEqual(st, 200)

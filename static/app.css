@@ -326,6 +326,14 @@ textarea.comment:focus { box-shadow: 0 0 0 3px var(--accent-soft); border-color:
 .btn.primary { background: var(--accent); border-color: transparent; color: #fff; }
 .sheet .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
 .sheet .err { color: #ff3b30; font-size: 12px; min-height: 16px; margin-left: 78px; }
+/* ---------- контекстне меню (правий клік) ---------- */
+.ctx { position: fixed; z-index: 50; min-width: 200px; padding: 5px; border-radius: 9px; background: var(--window);
+  border: 1px solid var(--sep); box-shadow: 0 8px 28px rgba(0,0,0,.28); font-size: 13px; }
+.ctx[hidden] { display: none; }
+.ctx button { display: block; width: 100%; text-align: left; border: 0; background: none; color: var(--text); font: inherit;
+  padding: 5px 10px; border-radius: 5px; cursor: default; }
+.ctx button:hover { background: var(--accent); color: #fff; }
+.ctx .ctx-h { padding: 4px 10px 5px; font-size: 11px; color: var(--text3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 320px; }
 .toast {
   position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: rgba(40,40,42,.92); color: #fff;
   padding: 8px 14px; border-radius: 8px; font-size: 12px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 20;

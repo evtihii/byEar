@@ -689,7 +689,10 @@ class Handler(BaseHTTPRequestHandler):
                 full = safe_join(p["path"], str(data.get("f") or "")) if p else None
                 if not full or not os.path.exists(full):
                     return self.error("Не знайдено", 404)
-                subprocess.run(["open", "-R", full])
+                if data.get("open") and os.path.isdir(full):
+                    subprocess.run(["open", full])           # відкрити теку у Finder
+                else:
+                    subprocess.run(["open", "-R", full])     # показати у Finder (виділити)
                 self.send_json({"ok": True})
             else:
                 self.error("Немає такої дії", 404)
