@@ -5,23 +5,133 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>наСлух — документація</title>
 <style>
-:root { --bg: #f6f6f7; --card: #fff; --text: #1d1d1f; --text2: #555; --accent: #0a84ff; --sep: #e2e2e5; }
-@media (prefers-color-scheme: dark) { :root { --bg: #1c1c1e; --card: #2a2a2d; --text: #f2f2f7; --text2: #b0b0b5; --accent: #4aa3ff; --sep: #3a3a3d; } }
-body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.6 -apple-system, BlinkMacSystemFont, sans-serif; }
+:root { --bg: #f6f6f7; --card: #fff; --text: #1d1d1f; --text2: #555; --text3: #888; --accent: #0a84ff; --sep: #e2e2e5;
+  --code: #f0f0f3; --ok: #1f9d55; --warn: #c27c0e; }
+@media (prefers-color-scheme: dark) { :root { --bg: #1c1c1e; --card: #2a2a2d; --text: #f2f2f7; --text2: #b0b0b5; --text3: #8a8a8f;
+  --accent: #4aa3ff; --sep: #3a3a3d; --code: #1f1f22; --ok: #4cd07d; --warn: #f0b04a; } }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
 main { max-width: 760px; margin: 0 auto; padding: 40px 20px 60px; }
-h1 { font-size: 28px; margin: 0 0 20px; letter-spacing: -.02em; }
-a.card { display: block; background: var(--card); border: 1px solid var(--sep); border-radius: 12px; padding: 16px 18px;
-  margin: 10px 0; color: var(--text); text-decoration: none; }
+h1 { font-size: 28px; letter-spacing: -.02em; margin: 0 0 6px; }
+.lead { color: var(--text2); margin: 0 0 28px; }
+h2 { font-size: 18px; margin: 34px 0 10px; }
+.card { background: var(--card); border: 1px solid var(--sep); border-radius: 12px; padding: 16px 18px; margin: 12px 0; }
+.step { display: flex; gap: 14px; }
+.n { flex: none; width: 28px; height: 28px; border-radius: 50%; background: var(--accent); color: #fff; font-weight: 700;
+  display: grid; place-items: center; font-size: 14px; margin-top: 2px; }
+.step h3 { margin: 0 0 6px; font-size: 16px; }
+.step > div:last-child { flex: 1; min-width: 0; }
+pre { background: var(--code); border: 1px solid var(--sep); border-radius: 8px; padding: 10px 12px; overflow-x: auto;
+  font: 13px/1.5 ui-monospace, Menlo, monospace; margin: 8px 0; white-space: pre; }
+code { font: 13px ui-monospace, Menlo, monospace; background: var(--code); padding: 1px 5px; border-radius: 4px; }
+pre code { background: none; padding: 0; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--sep); vertical-align: top; }
+th { color: var(--text3); font-weight: 600; font-size: 12px; }
+.ok { color: var(--ok); font-weight: 600; }
+.note { color: var(--text2); font-size: 14px; }
+.warn { border-left: 3px solid var(--warn); }
+#status { font-weight: 600; }
+a { color: var(--accent); }
+.flow { display: flex; align-items: stretch; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
+.flow .card { flex: 1 1 150px; margin: 0; font-size: 14px; }
+.flow .card b { display: block; margin-bottom: 4px; }
+.arrow { align-self: center; color: var(--text3); }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 620px) { .two { grid-template-columns: 1fr; } .arrow { display: none; } }
+.two .card { margin: 0; }
+.two h3 { margin: 0 0 6px; font-size: 16px; }
+a.card { display: block; color: var(--text); text-decoration: none; }
 a.card:hover { border-color: var(--accent); }
 a.card b { color: var(--accent); }
-a.card span { color: var(--text2); font-size: 14px; }
+ul { padding-left: 20px; margin: 6px 0; }
+li { margin: 3px 0; }
 </style>
 </head>
 <body>
 <main>
-  <h1>наСлух — документація</h1>
-  <a class="card" href="/docs/setup.html"><b>Проєкт з гри</b><br><span>Як агент налаштування дістає озвучку з гри і як повернутися до списку проєктів.</span></a>
-  <a class="card" href="/docs/whisper.html"><b>Диктування з Whisper</b><br><span>Як надиктувати коментар голосом і що для цього встановити.</span></a>
+  <h1>наСлух — як це працює</h1>
+  <p class="lead">наСлух (ByEar) — програма, щоб прослухати й виправити озвучку гри фраза за фразою: поруч звучать
+    оригінал і переклад, ти позначаєш, що добре, а що ні, і пишеш, що виправити. Виправляє агент — Claude.</p>
+
+  <h2>Шлях проєкту</h2>
+  <div class="flow">
+    <div class="card"><b>1. Налаштування</b>Агент дістає з гри всі фрази й розкладає по теках.</div>
+    <div class="arrow">→</div>
+    <div class="card"><b>2. Прослуховування</b>Ти слухаєш оригінал і переклад, ставиш позначки й коментарі.</div>
+    <div class="arrow">→</div>
+    <div class="card"><b>3. Правки</b>Агент виправляє фрази з позначкою «Виправити» — по черзі.</div>
+    <div class="arrow">→</div>
+    <div class="card"><b>4. Мод</b>Готові фрази збираються назад у файли гри.</div>
+  </div>
+  <p class="note">Одна фраза = одна тека: <code>en.wav</code> (оригінал, може бути кілька мов — <code>ja.wav</code> …),
+    <code>ua.wav</code> (переклад), <code>текст.txt</code> (що там сказано). Позначки й коментарі зберігаються в
+    <code>summary.json</code> проєкту.</p>
+
+  <h2>Як почати проєкт</h2>
+  <div class="two">
+    <div class="card"><h3>З гри</h3>Вказуєш теку гри. Агент налаштування оглядає її, показує план і зразки, а після
+      твого «так» видобуває фрази й пише скрипти, якими потім збирається мод. Гру він не змінює.</div>
+    <div class="card"><h3>Тека зі звуками</h3>Якщо фрази вже розкладено по теках (власним скриптом чи вручну) —
+      просто вкажи цю теку, і можна слухати одразу.</div>
+  </div>
+
+  <h2>Як працює налаштування</h2>
+  <div class="card">
+    <ul>
+      <li><b>Огляд.</b> Агент читає теку гри: на якому рушії вона зроблена, у яких архівах лежить звук, у якому
+        форматі, які є мови озвучки й скільки фраз, де субтитри. Дістає до 10 зразків.</li>
+      <li><b>План.</b> Ти слухаєш зразки, читаєш план і питання агента. Можна відповісти йому або попросити змінити
+        план — наприклад, «лише англійська й японська».</li>
+      <li><b>Видобування.</b> Лише після кнопки «Так, видобувай». Агент пише скрипт видобування, запускає його,
+        перевіряє, що файли читаються, і пише скрипт пакування та пам'ятку для агента правок.</li>
+      <li><b>Готово.</b> Проєкт стає звичайним: слухаєш і позначаєш, що виправити. Повернутися до списку проєктів можна будь-коли
+        кнопкою «← Проєкти».</li>
+    </ul>
+    <p class="note">Детально, з налаштуваннями: <a href="/docs/setup.html">Проєкт з гри</a>.</p>
+  </div>
+
+  <h2>Чому потрібен Claude</h2>
+  <p><b>Бо кожна гра влаштована по-своєму.</b> Одна зберігає звук в архівах Unreal Engine, інша — у банках FMOD
+    на Unity, третя — у власному форматі. Фрази можуть лежати окремими файлами або всередині «подій», мови — в
+    різних теках, а назви файлів зазвичай не збігаються з субтитрами. Звичайна програма знає лише ті ігри, під які
+    її написали. Тому з кожною новою грою моддер сидить днями: розбирає формат, пише скрипти, перевіряє.</p>
+  <p>Claude робить цю роботу так само, як моддер, тільки швидше: читає файли, пише невеликі скрипти, запускає їх,
+    дивиться на результат і виправляє. А те, що вже з'ясовано про певний тип ігор, наСлух зберігає в
+    <b>рецептах</b> — щоб наступного разу не починати з нуля.</p>
+
+  <div class="two">
+    <div class="card"><h3>Агент налаштування</h3>Працює один раз на проєкт: дістає фрази з гри й готує скрипти.
+      Сильніша модель (Opus), бо це дослідницька робота. Ліміт токенів і часу на кожен крок.</div>
+    <div class="card"><h3>Агент правок</h3>Працює весь час, поки ти слухаєш: бере фрази з позначкою «Виправити» й
+      виправляє за твоїм коментарем — гучність, паузи, темп, новий дубль. Дешевша модель (Sonnet).</div>
+  </div>
+
+  <h2>Чого агент не робить</h2>
+  <div class="card warn">
+    <ul>
+      <li>Не змінює теку гри — лише читає. Усе, що він створює, лежить у робочій теці проєкту.</li>
+      <li>Не видобуває все, поки ти не погодишся з планом.</li>
+      <li>Не шукає ключів шифрування й не обходить захисту. Лише твоя копія гри, мод для себе.</li>
+      <li>Не вирішує за тебе, що звучить добре: слухаєш і вирішуєш ти.</li>
+    </ul>
+  </div>
+
+  <h2>Що потрібно на комп'ютері</h2>
+  <div class="card">
+    <ul>
+      <li><b>Claude Code</b> (команда <code>claude</code>), з входом у твій акаунт Claude. Скільки використано з
+        5-годинного й тижневого ліміту, видно на лівій панелі наСлуху; перед правкою, коли ліміт майже вичерпано,
+        наСлух попередить.</li>
+      <li><b>ffmpeg</b> — для роботи зі звуком (<code>brew install ffmpeg</code>).</li>
+      <li>За бажання — <b>Whisper</b> для диктування коментарів голосом: <a href="/docs/whisper.html">як встановити</a>.</li>
+    </ul>
+    <p class="note">Ціну кожного кроку видно поруч із відповіддю агента — у токенах і в доларах за цінами API.</p>
+  </div>
+
+  <h2>Інші сторінки</h2>
+  <a class="card" href="/docs/setup.html"><b>Проєкт з гри</b><br><span class="note">Кроки налаштування, межі, рецепти, параметри.</span></a>
+  <a class="card" href="/docs/whisper.html"><b>Диктування з Whisper</b><br><span class="note">Як надиктувати коментар голосом і що для цього встановити.</span></a>
 </main>
 </body>
 </html>
