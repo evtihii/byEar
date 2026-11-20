@@ -201,7 +201,7 @@ function renderDetail() {
       <span>хвіст</span><input type="number" id="echoTail" step="0.1" min="0.1" max="4" value="${esc(ls.get("echoTail") || 1)}" title="За скільки секунд луна згасає">с
       <button class="btn" id="echoBtn" title="Додати луну до всього файлу або до виділеного шматка; гучність слів лишається тією самою">Додати луну</button>
       <span class="hint">⌘Z — прибрати</span></div>` : ""}
-    <div class="section-label">Коментар</div>
+    <div class="section-label comment-head">Коментар <button class="dict-btn" id="dictBtn" title="Диктувати коментар голосом (диктування macOS). Клавіша D">${I.mic} Диктувати</button></div>
     <textarea class="comment" id="comment" placeholder="Що не так? Наприклад: наголос у слові…, тон не той, пауза задовга…" spellcheck="true"></textarea>
     <div class="status-bar under">${Object.entries(STATUS).map(([k, s]) =>
       `<button class="sbtn ${k} ${e.status === k ? "on" : ""}" data-st="${k}"><span style="color:${s.color}">${I[k]}</span>${s.name}<kbd>${s.key}</kbd></button>`).join("")}
@@ -230,6 +230,7 @@ function renderDetail() {
   const tb = $("tempoBtn"); if (tb) tb.onclick = () => { const v = Math.round(Number($("tempoPct").value)); if (!v) { toast("Вкажи, на скільки відсотків змінити довжину (наприклад -10 або 15)"); $("tempoPct").focus(); return; } editTempo(it, { pct: v }); };
   const fb = $("fitBtn"); if (fb) fb.onclick = () => editTempo(it, { fit: true });
   const eb = $("echoBtn"); if (eb) eb.onclick = () => editEcho(it);
+  const db = $("dictBtn"); if (db) db.onclick = () => startDictation();
   ["echoAmt", "echoTail"].forEach((id) => { const x = $(id); if (x) x.addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); editEcho(it); } }); });
   const tp = $("tempoPct"); if (tp) tp.addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); $("tempoBtn").click(); } });
   const nb = $("normBtn"); if (nb) nb.onclick = () => editAudio(it, "normalize");

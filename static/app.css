@@ -270,6 +270,10 @@ svg { display: block; }
 .ptime b { color: var(--text); font-weight: 500; }
 
 .section-label { font-size: 11px; font-weight: 600; color: var(--text3); margin: 0 0 6px; }
+.comment-head { display: flex; align-items: center; gap: 8px; }
+.dict-btn { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; font: inherit; font-size: 12px; font-weight: 500;
+  height: 24px; padding: 0 10px; border-radius: 12px; border: 1px solid var(--field-border); background: var(--field); color: var(--text); cursor: default; }
+.dict-btn:hover { border-color: var(--accent); color: var(--accent); }
 .grp-label { font-size: 11px; font-weight: 600; color: var(--text3); margin: 0 0 6px 2px; letter-spacing: .02em; }
 .grp-label.tr { margin-top: 4px; color: var(--accent); }
 .players.src { margin-bottom: 8px; }

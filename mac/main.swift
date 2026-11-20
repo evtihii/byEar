@@ -24,7 +24,7 @@ func serverPort() -> Int {
 let port = serverPort()
 let baseURL = URL(string: "http://localhost:\(port)/")!
 
-final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNavigationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNavigationDelegate, WKScriptMessageHandler {
     var window: NSWindow!
     var web: WKWebView!
     var server: Process?
@@ -35,6 +35,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
         let cfg = WKWebViewConfiguration()
         cfg.mediaTypesRequiringUserActionForPlayback = []
         cfg.websiteDataStore = .default()                 // localStorage між запусками
+        cfg.userContentController.add(self, name: "byear")   // команди сторінки: {action: "dictate"}
         web = WKWebView(frame: .zero, configuration: cfg)
         web.uiDelegate = self
         web.navigationDelegate = self
@@ -131,6 +132,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
         if p.isRunning { kill(p.processIdentifier, SIGKILL) }
     }
 
+    // ---------- команди сторінки ----------
+    func userContentController(_ c: WKUserContentController, didReceive m: WKScriptMessage) {
+        guard let d = m.body as? [String: Any], let action = d["action"] as? String else { return }
+        if action == "dictate" { dictate(nil) }
+    }
+
+    // Системне диктування macOS у полі, де стоїть курсор (те саме, що двічі Fn)
+    @objc func dictate(_ s: Any?) {
+        window.makeKeyAndOrderFront(nil)
+        window.makeFirstResponder(web)
+        NSApp.activate(ignoringOtherApps: true)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            if !NSApp.sendAction(Selector(("startDictation:")), to: nil, from: self) {
+                let a = NSAlert()
+                a.messageText = "Не вдалося запустити диктування"
+                a.informativeText = "Увімкни його: Системні параметри → Клавіатура → Диктування (і вибери українську мову)."
+                a.beginSheetModal(for: self.window) { _ in }
+            }
+        }
+    }
+
     // ---------- WebKit: діалоги, посилання ----------
     func webView(_ w: WKWebView, runJavaScriptAlertPanelWithMessage m: String,
                  initiatedByFrame f: WKFrameInfo, completionHandler done: @escaping () -> Void) {
@@ -199,6 +221,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
             item("Копіювати", #selector(NSText.copy(_:)), "c"),
             item("Вставити", #selector(NSText.paste(_:)), "v"),
             item("Виділити все", #selector(NSText.selectAll(_:)), "a"),
+            .separator(),
+            item("Почати диктування", #selector(dictate(_:)), "d", [.command, .option]),
         ])
         sub("Вигляд", [
             item("Оновити сторінку", #selector(reloadPage(_:)), "r"),

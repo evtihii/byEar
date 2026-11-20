@@ -1,5 +1,13 @@
 /* ByEar (наСлух) — контекстне меню по правому кліку: «Показати у Finder», «Відкрити теку».
    Звичайний (не модульний) скрипт: файли static/js/* вантажаться по черзі й ділять глобальну область. */
+/* ---------- диктування: у ByEar.app — системне диктування macOS у полі коментаря ---------- */
+function startDictation() {
+  const ta = $("comment"); if (!ta) return;
+  ta.focus(); const n = ta.value.length; ta.setSelectionRange(n, n);   // курсор у кінець — текст допишеться
+  const h = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.byear;
+  if (h) { h.postMessage({ action: "dictate" }); return; }
+  toast("У браузері: двічі натисни Fn (або 🎤), щоб диктувати в це поле. Кнопка запускає диктування сама в ByEar.app");
+}
 const ctxEl = document.createElement("div");
 ctxEl.className = "ctx"; ctxEl.hidden = true; document.body.appendChild(ctxEl);
 let ctxItems = [];

@@ -58,6 +58,12 @@ python3 tempo.py in.wav out.wav --length 3.2                    # whole file 3.2
 python3 tempo.py in.wav out.wav --speed 0.9 --start 1 --end 2.5 # only that region, slower
 ```
 
+## Dictation
+
+The “Диктувати” button next to the comment (or the D key) starts macOS dictation in the comment field when
+running in ByEar.app; in a browser, press Fn twice. Turn dictation on once in System Settings → Keyboard →
+Dictation and pick the language. Recognition is done by macOS, so the agent simply gets the text.
+
 ## Echo
 
 “Луна” row: amount (%) and tail (seconds until it dies out), for the whole file or the selected region (a
