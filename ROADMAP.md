@@ -44,6 +44,8 @@ Ideas for later: planned ahead, not implemented yet unless checked.
   to the Trash; language tags and names come from the server (`/api/config`), a project can add `lang_names`.
 - [x] **Generation cost per job** (2026-11-20): credits spent on the generation service (ElevenLabs) via the
   project's `usage_cmd`, shown in orange next to the Claude cost; remaining credits on the left rail.
+- [x] **Tempo without pitch change** (2026-11-20): whole file, a region, or fit to the reference length;
+  `tempo.py` also works from the command line. Higher quality (rubberband) if ffmpeg is built with it.
 - [ ] Detect original audio pasted into the translation (e.g. English breaths) — needs audio fingerprinting.
 
 ## Other

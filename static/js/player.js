@@ -38,6 +38,7 @@ class Player {
         <button class="pri" data-a="norm" title="Підігнати гучність шматка під те саме місце в англійській">Нормалізувати</button>
         <button data-a="-1" title="Тихіше на 1 дБ">−1 дБ</button><button data-a="+1" title="Гучніше на 1 дБ">+1 дБ</button>
         <button data-a="-3">−3</button><button data-a="+3">+3</button>
+        <button data-a="t-5" title="Стиснути шматок на 5 % (швидше), висота та сама">Коротше 5%</button><button data-a="t+5" title="Розтягнути шматок на 5 % (повільніше), висота та сама">Довше 5%</button>
         <button class="x" data-a="clear" title="Зняти виділення (Esc)">✕</button></div>` : ""}`;
     this.btn = el.querySelector(".play"); this.canvas = el.querySelector("canvas"); this.time = el.querySelector(".ptime");
     this.bar = el.querySelector(".selbar");
@@ -46,6 +47,7 @@ class Player {
       const it = S.byId.get(this.itemId); const a = b.dataset.a;
       if (a === "clear") this.setSel(null);
       else if (a === "norm") editAudio(it, "normalize");
+      else if (a.startsWith("t")) editTempo(it, { pct: Number(a.slice(1)) });
       else editAudio(it, "gain", Number(a));
     });
     this.btn.onclick = () => { activate(idx); this.toggle(); };
@@ -129,6 +131,15 @@ class Player {
 function layoutScales() {
   const max = Math.max(...players.map((p) => p.duration).filter(isFinite), 0);
   for (const p of players) { p.scale = max && isFinite(p.duration) ? p.duration / max : 1; p.draw(); }
+  renderTempoHint();
+}
+function renderTempoHint() {
+  const h = $("tempoHint"); const it = S.sel && S.byId.get(S.sel); if (!h || !it) return;
+  const ep = editPlayer(); const rf = refFile(it);
+  const rp = rf ? players.find((p) => p.file === rf) : null;
+  const ud = ep && isFinite(ep.duration) ? ep.duration : null, rd = rp && isFinite(rp.duration) ? rp.duration : null;
+  h.textContent = ud == null ? "" : `зараз ${ud.toFixed(2)} с` + (rd != null ? ` · ${canon(rf.tag).toUpperCase()} ${rd.toFixed(2)} с (${ud > rd ? "+" : ""}${Math.round((ud / rd - 1) * 100)}%)` : "");
+  const fb = $("fitBtn"); if (fb) { fb.disabled = !rf; fb.textContent = rf ? `Довжина як ${canon(rf.tag).toUpperCase()}` : "Довжина як в еталоні"; }
 }
 function activate(i) { activeIdx = i; players.forEach((p, j) => p.el.classList.toggle("active", j === i && players.length > 1)); }
 function stopAll() { chain = null; for (const p of players) { p.stop(); cancelAnimationFrame(p.raf); p.audio.src = ""; } players = []; }
@@ -178,7 +189,12 @@ function renderDetail() {
       <input type="number" id="volDb" step="1" min="-30" max="30" value="0" title="Крок 1 дБ; мінус — тихіше"> дБ
       <button class="btn" id="volBtn">Змінити гучність</button>
       <button class="btn" id="normBtn" title="Підігнати гучність під вибраний еталон (весь файл — за LUFS, шматок — за тим самим місцем в еталоні)">Нормалізувати як EN</button>
-      <button class="link-btn" id="selClear" hidden>скинути виділення</button></div>` : ""}
+      <button class="link-btn" id="selClear" hidden>скинути виділення</button></div>
+    <div class="vol-row tempo-row"><span>Довжина:</span>
+      <input type="number" id="tempoPct" step="1" min="-40" max="80" value="0" title="На скільки відсотків змінити довжину: мінус — коротше (швидше), плюс — довше (повільніше). Висота голосу не змінюється">%
+      <button class="btn" id="tempoBtn" title="Змінити темп без зміни висоти голосу (весь файл або виділений шматок)">Змінити темп</button>
+      <button class="btn" id="fitBtn" title="Стиснути чи розтягнути весь файл до довжини еталона, без зміни висоти голосу">Довжина як в еталоні</button>
+      <span class="hint" id="tempoHint"></span></div>` : ""}
     <div class="section-label">Коментар</div>
     <textarea class="comment" id="comment" placeholder="Що не так? Наприклад: наголос у слові…, тон не той, пауза задовга…" spellcheck="true"></textarea>
     <div class="status-bar under">${Object.entries(STATUS).map(([k, s]) =>
@@ -205,6 +221,9 @@ function renderDetail() {
   let ct;
   ta.addEventListener("input", () => { syncFix(); clearTimeout(ct); ct = setTimeout(() => { setFb(it.id, { comment: ta.value, heard: true }); updateRow(it.id); }, 400); });
   const vb = $("volBtn"); if (vb) vb.onclick = () => changeVolume(it);
+  const tb = $("tempoBtn"); if (tb) tb.onclick = () => { const v = Math.round(Number($("tempoPct").value)); if (!v) { toast("Вкажи, на скільки відсотків змінити довжину (наприклад -10 або 15)"); $("tempoPct").focus(); return; } editTempo(it, { pct: v }); };
+  const fb = $("fitBtn"); if (fb) fb.onclick = () => editTempo(it, { fit: true });
+  const tp = $("tempoPct"); if (tp) tp.addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); $("tempoBtn").click(); } });
   const nb = $("normBtn"); if (nb) nb.onclick = () => editAudio(it, "normalize");
   const sc = $("selClear"); if (sc) sc.onclick = () => { const p = editPlayer(); if (p) p.setSel(null); };
   const vi = $("volDb"); if (vi) vi.addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); changeVolume(it); } });

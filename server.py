@@ -641,8 +641,14 @@ class Handler(BaseHTTPRequestHandler):
                     return self.error("Файл не знайдено", 404)
                 ref = safe_join(p["path"], str(data.get("ref") or "")) if data.get("ref") else None
                 try:
-                    info = agents.audio_edit(full, rel, data.get("op", "gain"), data.get("db", 0),
-                                             data.get("start"), data.get("end"), ref)
+                    if data.get("op") == "tempo":
+                        # темп без зміни висоти: speed (множник) або length (с); fit_ref — довжина як в еталоні
+                        info = agents.audio_tempo(full, rel, data.get("speed"), data.get("length"),
+                                                  data.get("start"), data.get("end"),
+                                                  ref if data.get("fit_ref") else None)
+                    else:
+                        info = agents.audio_edit(full, rel, data.get("op", "gain"), data.get("db", 0),
+                                                 data.get("start"), data.get("end"), ref)
                 except (RuntimeError, ValueError, TypeError) as e:
                     return self.error(str(e))
                 self.send_json({"ok": True, "mtime": round(os.path.getmtime(full), 2), "info": info})

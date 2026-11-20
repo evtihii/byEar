@@ -18,6 +18,7 @@ import time
 import uuid
 
 import analysis
+import tempo
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.environ.get("SLUHACH_DATA") or HERE
@@ -809,6 +810,51 @@ def _duration(full):
         return float(r.stdout.strip())
     except ValueError:
         return None
+
+
+def audio_tempo(full, rel, speed=None, length=None, start=None, end=None, ref=None):
+    """Змінити темп без зміни висоти (tempo.py / ffmpeg atempo).
+    speed — множник (>1 швидше й коротше); length — бажана довжина (файлу чи шматка) у секундах;
+    ref — підігнати довжину всього файлу під еталон. Стара версія — у Кошик і в історію (⌘Z)."""
+    if not FFMPEG or not FFPROBE:
+        raise RuntimeError("Не знайдено ffmpeg")
+    total = _duration(full) or 0
+    part = start is not None and end is not None
+    if part:
+        start, end = max(0.0, float(start)), min(total, float(end))
+        if end - start < 0.05:
+            raise RuntimeError("Виділення закоротке")
+    region = (end - start) if part else total
+    if ref:
+        if part:
+            raise RuntimeError("Під еталон підганяється весь файл — зніми виділення")
+        if not os.path.isfile(ref):
+            raise RuntimeError("Немає файлу еталона")
+        length = _duration(ref)
+    if length:
+        speed = region / float(length)
+    if not speed:
+        raise RuntimeError("Вкажи, наскільки змінити темп")
+    speed = float(speed)
+    if abs(speed - 1) < 0.005:
+        raise RuntimeError("Довжина вже така — нічого не змінюю")
+    _backup(full, rel)
+    history_push(full)
+    ext = os.path.splitext(full)[1].lower()
+    tmp = full + ".tmp" + ext
+    try:
+        tempo.stretch(FFMPEG, full, tmp, speed, start if part else None, end if part else None, total,
+                      _codec_args(full))
+    except (ValueError, RuntimeError):
+        history_drop_last(full)
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        raise
+    os.replace(tmp, full)
+    return {"speed": round(speed, 3), "before": round(total, 2), "after": round(_duration(full) or 0, 2),
+            "history": history_state(full)}
 
 
 def audio_edit(full, rel, op, db=0.0, start=None, end=None, ref=None):

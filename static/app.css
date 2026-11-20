@@ -218,6 +218,8 @@ svg { display: block; }
 .vol-row input { width: 64px; font: inherit; font-size: 13px; color: var(--text); background: var(--field); border: 1px solid var(--field-border); border-radius: 6px; height: 26px; padding: 0 6px; outline: none; text-align: right; user-select: text; -webkit-user-select: text; }
 .vol-row input:focus { box-shadow: 0 0 0 3px var(--accent-soft); border-color: var(--accent); }
 .vol-row .vt { font-weight: 600; color: var(--text); }
+.vol-row.tempo-row { margin-top: -10px; }
+.vol-row .hint { color: var(--text3); font-variant-numeric: tabular-nums; }
 .agent-card { background: var(--card); border-radius: 10px; padding: 10px 14px; margin-bottom: 18px; font-size: 13px; user-select: text; -webkit-user-select: text; white-space: pre-wrap; }
 .agent-card .cost { display: block; font-weight: 700; color: var(--orange); font-size: 12px; margin: 0 0 6px; white-space: normal; }
 .chk { white-space: normal; margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--hover); font-size: 12px; color: var(--text2); }

@@ -45,6 +45,19 @@ Project fields:
 
 Audio, API keys and local data (queue, logs, edit history) never go into the repository — see `.gitignore`.
 
+## Tempo without pitch change
+
+Under the volume row: “Довжина ±%” changes the tempo of the whole file or of the selected region, and
+“Довжина як EN/JA” stretches or squeezes the whole file to the reference length; quick “−5% / +5%” buttons
+appear on a selection. The pitch stays the same (ffmpeg `atempo`, clean for speech within about ±25 %);
+⌘Z undoes. The same is available from the command line for agents and scripts:
+
+```
+python3 tempo.py in.wav out.wav --speed 1.1                     # 10 % faster (shorter)
+python3 tempo.py in.wav out.wav --length 3.2                    # whole file 3.2 s long
+python3 tempo.py in.wav out.wav --speed 0.9 --start 1 --end 2.5 # only that region, slower
+```
+
 ## After each agent job
 
 ByEar keeps the version the agent overwrote (“▶ До правки” plays it, ⌘Z restores it) and measures pitch,

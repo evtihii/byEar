@@ -269,6 +269,67 @@ class CancelFromLine(unittest.TestCase):
             s.close()
 
 
+class Tempo(unittest.TestCase):
+    """Tempo change without pitch change: whole file, a region, fit to the reference, undo."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.s = Server("noop")
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.s.close()
+
+    def edit(self, body):
+        body = dict({"f": "grp/01_a/ua.wav", "op": "tempo"}, **body)
+        return self.s.post("/api/audio-edit?p=" + self.s.pid, body)
+
+    def measure(self):
+        import agents
+        import analysis
+        full = os.path.join(self.s.tmp, "game", "grp", "01_a", "ua.wav")
+        return analysis.measure(agents.FFMPEG, agents._measure, agents._duration, full)
+
+    def undo(self):
+        st, _ = self.s.post("/api/audio-undo?p=" + self.s.pid, {"f": "grp/01_a/ua.wav"})
+        self.assertEqual(st, 200)
+
+    def test_whole_file_faster_same_pitch(self):
+        m0 = self.measure()
+        st, r = self.edit({"speed": 1.25})
+        self.assertEqual(st, 200, r)
+        m1 = self.measure()
+        self.assertAlmostEqual(m1["dur"], m0["dur"] / 1.25, delta=0.05)
+        self.assertAlmostEqual(m1["f0"], m0["f0"], delta=m0["f0"] * 0.05)
+        self.undo()
+        self.assertAlmostEqual(self.measure()["dur"], m0["dur"], delta=0.01)
+
+    def test_region_longer(self):
+        m0 = self.measure()
+        st, r = self.edit({"speed": 0.8, "start": 0.5, "end": 1.5})
+        self.assertEqual(st, 200, r)
+        # 1 s region at 0.8× → 1.25 s; two 10 ms seams
+        self.assertAlmostEqual(self.measure()["dur"], m0["dur"] + 0.25 - 0.02, delta=0.03)
+        self.undo()
+
+    def test_fit_reference(self):
+        # ua.wav and en.wav are both 2 s: make ua 3 s first, then fit back to the reference
+        self.edit({"length": 3.0})
+        self.assertAlmostEqual(self.measure()["dur"], 3.0, delta=0.05)
+        st, r = self.edit({"fit_ref": True, "ref": "grp/01_a/en.wav"})
+        self.assertEqual(st, 200, r)
+        self.assertAlmostEqual(self.measure()["dur"], 2.0, delta=0.05)
+        self.undo()
+        self.undo()
+
+    def test_out_of_range_rejected_without_history(self):
+        st, r = self.edit({"speed": 3.5})
+        self.assertEqual(st, 400)
+        st, h = self.s.post("/api/audio-history?p=" + self.s.pid, {"f": "grp/01_a/ua.wav"})
+        if st == 200:
+            self.assertEqual(h.get("history", h).get("undo", 0), 0)
+
+
 class Pitch(unittest.TestCase):
     def test_pitch_of_tones(self):
         import agents

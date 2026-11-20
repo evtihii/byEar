@@ -75,6 +75,7 @@ function renderRefRow(it) {
     return `<button class="rb ${l === r ? "on" : ""}" data-ref="${esc(l)}" title="${l === r ? "Вимкнути: агент працюватиме лише за коментарем" : "Агент робитиме «як у цьому оригіналі»"}">${esc(l.toUpperCase())}</button>`; }).join("")}
     <span class="hint">${r ? `«правильно» = як ${esc(langName(r) ? "в " + langName(r).replace(/а$/, "ій") : r.toUpperCase())}` : "не вибрано — лише за коментарем"}</span>`;
   const nb = $("normBtn"); if (nb) nb.textContent = r ? `Нормалізувати як ${r.toUpperCase()}` : "Нормалізувати як еталон";
+  if (typeof renderTempoHint === "function") renderTempoHint();
 }
 document.addEventListener("click", (e) => {
   const b = e.target.closest("[data-ref]"); if (!b || !S.sel) return;
