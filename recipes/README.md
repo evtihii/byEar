@@ -8,7 +8,7 @@ The setup agent reads this list first and opens the recipe that matches the game
 | [unreal_wwise.md](unreal_wwise.md) | Unreal Engine 4/5 `.pak` + Audiokinetic Wwise (`.bnk`, `.wem`) | SILENT HILL f (UE5, pak v11, Oodle) |
 
 No recipe fits? Work it out, and at the end write what you learned as a new recipe draft in the workspace
-(`.byear/recipe_draft.md`) — the user can add it here.
+(`.holosii/recipe_draft.md`) — the user can add it here.
 
 ## Rules for every recipe
 

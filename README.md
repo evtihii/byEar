@@ -1,4 +1,4 @@
-# ByEar (наСлух)
+# Holosii (Голосій)
 
 A local tool for reviewing and fixing game voice-over by ear: original and translated takes side by side,
 “OK” / “Fix” marks with comments, gain and normalization edits right on the waveform (with undo),
@@ -6,21 +6,21 @@ a fix queue handled by an AI coding agent, and per-folder “ready to embed” m
 
 ## An add-on over an AI coding agent
 
-ByEar does not generate or edit voice-over itself. It is a review layer on top of an AI coding agent:
-you listen, mark a line “Fix” and write what is wrong; ByEar queues the job and hands it to the agent
+Holosii does not generate or edit voice-over itself. It is a review layer on top of an AI coding agent:
+you listen, mark a line “Fix” and write what is wrong; Holosii queues the job and hands it to the agent
 together with the files, the line text, your comment and the chosen reference original. The agent does
 the actual work in your project (regenerating takes, aligning pauses, matching loudness) following a
-per-project brief, and ByEar shows you the result for the next listen.
+per-project brief, and Holosii shows you the result for the next listen.
 
-- **Claude Code** — supported now. ByEar keeps one persistent `claude` session per app run, shows its
+- **Claude Code** — supported now. Holosii keeps one persistent `claude` session per app run, shows its
   context size and lets you compact it.
 - **Codex** — planned (see [ROADMAP.md](ROADMAP.md)).
 
 ## Running
 
-- **macOS app:** `zsh mac/build.sh` builds `ByEar.app` next to `server.py`. The app starts the server
+- **macOS app:** `zsh mac/build.sh` builds `Holosii.app` next to `server.py`. The app starts the server
   itself and stops it (together with the agent) on ⌘Q. If a server is already running, it just attaches.
-- **Without the app:** `python3 server.py` (or `ByEar.command`), then open http://localhost:8765.
+- **Without the app:** `python3 server.py` (or `Holosii.command`), then open http://localhost:8765.
 
 Requirements: Python 3.10+, `ffmpeg` / `ffprobe`; for the fix queue — [Claude Code](https://claude.com/claude-code) (`claude`).
 
@@ -39,8 +39,8 @@ Project fields:
   (can be changed per line with the “reference” buttons under the originals);
 - `usage_cmd`, `usage_label` — optional command that prints the generation service's credit counter as JSON
   `{"used": …, "limit": …, "reset": <unix time>}` (e.g. a small script that asks ElevenLabs with the
-  project's own key). ByEar runs it before and after each agent job and shows the difference as the
-  generation cost; the remaining credits appear on the left rail. API keys stay in the project — ByEar
+  project's own key). Holosii runs it before and after each agent job and shows the difference as the
+  generation cost; the remaining credits appear on the left rail. API keys stay in the project — Holosii
   never reads them.
 
 **A project straight from a game.** “New project → From a game” opens a setup window with its own agent
@@ -50,9 +50,9 @@ after your “yes” extracts every voice line into `listen/` and writes the pro
 looks for encryption keys or bypasses protection. “← Проєкти” takes you back to the project list from anywhere.
 
 The left rail also shows the **Claude plan limits**: how much of the 5-hour window is used (big number) and of
-the week (below), with reset times in the tooltip. ByEar takes them from Claude Code's own stream
+the week (below), with reset times in the tooltip. Holosii takes them from Claude Code's own stream
 (`rate_limit_event`), so it never touches your login; click the block to refresh. Before a job is sent at
-≥ 90 % (or when a limit is reached) ByEar asks first.
+≥ 90 % (or when a limit is reached) Holosii asks first.
 
 Audio, API keys and local data (queue, logs, edit history) never go into the repository — see `.gitignore`.
 
@@ -90,7 +90,7 @@ python3 echo.py in.wav out.wav --amount 50 --tail 2 --start 1 --end 2.4
 
 ## After each agent job
 
-ByEar keeps the version the agent overwrote (“▶ До правки” plays it, ⌘Z restores it) and measures pitch,
+Holosii keeps the version the agent overwrote (“▶ До правки” plays it, ⌘Z restores it) and measures pitch,
 loudness and length of the new file, the previous version and the reference. Pitch is compared with the
 previous version (same voice; the reference is usually another actor in another language, shown greyed for
 information), loudness and length with the reference. Large differences (e.g. a pitch-shifted voice or a much
@@ -101,7 +101,7 @@ goes over `max_job_tokens` is stopped.
 
 - `model` — agent model; `timeout_min` — minutes per job; `max_job_tokens` — token limit per job;
 - `auto_compact_at` — compact the agent's context above this size;
-- `port` — server port (default 8765; the `PORT` environment variable wins). ByEar.app reads the same file.
+- `port` — server port (default 8765; the `PORT` environment variable wins). Holosii.app reads the same file.
 
 ## Security
 

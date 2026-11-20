@@ -2,9 +2,9 @@
 own `extract` / `pack` scripts. Separate from the fix agent (agents.py): its own Claude run per step, a stronger
 model, its own token limit.
 
-Steps (state in <workspace>/.byear/setup.json):
+Steps (state in <workspace>/.holosii/setup.json):
     new → surveying → plan (or blocked / waiting) → extracting → ready → done
-The agent reports through files: .byear/plan.json after the survey, .byear/result.json after the extraction.
+The agent reports through files: .holosii/plan.json after the survey, .holosii/result.json after the extraction.
 Every step is a separate `claude -p` run that resumes the same session, so the agent remembers the earlier ones;
 the user can also write to it between steps.
 """
@@ -28,7 +28,7 @@ _lock = threading.Lock()
 
 
 def _dir(ws):
-    return os.path.join(ws, ".byear")
+    return os.path.join(ws, ".holosii")
 
 
 def state_path(ws):
@@ -83,7 +83,7 @@ def recipes():
 
 
 # --- prompts --------------------------------------------------------------------------------------------------
-COMMON = """You are ByEar's project setup agent. ByEar is a tool for reviewing and fixing a game's voice-over
+COMMON = """You are Holosii's project setup agent. Holosii is a tool for reviewing and fixing a game's voice-over
 translation, line by line. Your job is to get the game's original voice lines into listening folders, and later
 to put the translated lines back into the game.
 
@@ -95,7 +95,7 @@ Project name: {name}
 Rules:
 - Only the user's own copy of the game, for a personal mod. Do not look for encryption keys, do not bypass DRM,
   anti-cheat or any protection. If the archives are encrypted, say so and stop.
-- Put helper scripts in {ws}/tools/, temporary files in {ws}/.byear/tmp/. Never write outside the workspace.
+- Put helper scripts in {ws}/tools/, temporary files in {ws}/.holosii/tmp/. Never write outside the workspace.
 - Prefer streaming/reading by offset over copying whole multi-GB archives.
 - Write every message to the user in Ukrainian, short and plain (the user is not a programmer). Technical
   names (file formats, tools) may stay as they are.
@@ -105,9 +105,9 @@ SURVEY = COMMON + """
 THIS STEP: SURVEY ONLY. Do not extract everything yet.
 1. Find the engine, the archive format, the audio middleware, which voice languages exist and roughly how many
    voiced lines each has (gameplay vs cutscenes if it differs), and where the subtitle text is.
-2. Extract and decode at most 10 sample lines (a few per language) into {ws}/.byear/samples/ as
+2. Extract and decode at most 10 sample lines (a few per language) into {ws}/.holosii/samples/ as
    <NN>_<lang>.wav, so the user can listen and confirm.
-3. Write {ws}/.byear/plan.json:
+3. Write {ws}/.holosii/plan.json:
 {{
   "engine": "…", "audio": "…", "recipe": "<recipe file or null>",
   "languages": [{{"code": "en", "name": "англійська", "lines": 1234, "note": "…"}}],
@@ -124,22 +124,22 @@ THIS STEP: SURVEY ONLY. Do not extract everything yet.
 """
 
 EXTRACT = COMMON + """
-THIS STEP: EXTRACTION. The user approved the plan in {ws}/.byear/plan.json.{note}
+THIS STEP: EXTRACTION. The user approved the plan in {ws}/.holosii/plan.json.{note}
 1. Write {ws}/tools/extract.py — re-runnable (skips what is already there), never touches the game — and run it.
    It fills {ws}/listen/ with one folder per voice line:
      listen/<group>/<NNN>_<key>/<lang>.wav   one file per original language (en.wav, ja.wav, …)
      listen/<group>/<NNN>_<key>/текст.txt    the original text (subtitle and/or transcript), labelled by language
    <group> = chapter / scene / type when the game's names show it (Latin or the game's own names). <key> = the
    game's own id of the line, so the line can be found again when packing. Keep a machine-readable index of
-   every line (key ↔ game file/event/media id) in {ws}/.byear/lines.json.
+   every line (key ↔ game file/event/media id) in {ws}/.holosii/lines.json.
    Do not create translation files (ua.wav): the user's voice-over goes there later.
 2. Write {ws}/tools/pack.py — builds a mod from translated files (listen/**/ua.wav, or a folder given on the
    command line) into {ws}/build/ only. It must not install anything into the game. Test it on 1–2 lines
    (copy en.wav as a stand-in translation into a temp folder) and check the result decodes; then delete the test.
 3. Write {ws}/BRIEF.md for the fix agent (it edits single lines later): where things are, how lines map to
    game files, how to rebuild, what tools exist.
-4. If no recipe matched, write what you learned to {ws}/.byear/recipe_draft.md in the style of the recipes.
-5. Write {ws}/.byear/result.json:
+4. If no recipe matched, write what you learned to {ws}/.holosii/recipe_draft.md in the style of the recipes.
+5. Write {ws}/.holosii/result.json:
 {{"lines": 1234, "languages": ["en", "ja"], "default_ref": "en",
   "extract_cmd": ["python3", "{ws}/tools/extract.py"], "pack_cmd": ["python3", "{ws}/tools/pack.py"],
   "notes": "short Ukrainian summary: what is in listen/, what is missing"}}
@@ -148,7 +148,7 @@ THIS STEP: EXTRACTION. The user approved the plan in {ws}/.byear/plan.json.{note
 
 TALK = COMMON + """
 The user writes to you between steps. Answer, and do what they ask if it fits the current step; keep
-{ws}/.byear/plan.json (and result.json, if it exists) up to date when something changes.
+{ws}/.holosii/plan.json (and result.json, if it exists) up to date when something changes.
 
 User: {text}
 """
@@ -305,7 +305,7 @@ def _follow(ws, proc, kind, prev, settings):
 
 
 def finish(ws):
-    """The user accepts the result: the project becomes a normal ByEar project."""
+    """The user accepts the result: the project becomes a normal Holosii project."""
     st = load(ws)
     if st["state"] != "ready" or not st.get("result"):
         return None, "Видобування ще не завершено"
@@ -322,7 +322,7 @@ def finish(ws):
 
 
 def safe_file(ws, rel):
-    """A file inside the workspace's .byear folder (samples), or None."""
+    """A file inside the workspace's .holosii folder (samples), or None."""
     base = os.path.realpath(_dir(ws))
     full = os.path.realpath(os.path.join(base, rel))
     if not full.startswith(base + os.sep) or not os.path.isfile(full):

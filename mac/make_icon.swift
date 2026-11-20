@@ -1,4 +1,4 @@
-// Малює іконку наСлуху (рожевий квадрат із навушниками) у PNG 1024×1024: swift make_icon.swift out.png
+// Малює іконку Голосія (рожевий квадрат із навушниками) у PNG 1024×1024: swift make_icon.swift out.png
 import Cocoa
 
 let size: CGFloat = 1024

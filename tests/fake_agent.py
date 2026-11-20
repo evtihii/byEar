@@ -25,7 +25,7 @@ def setup_step(prompt):
     print(json.dumps({"type": "system", "subtype": "init", "session_id": "setup-s1"}), flush=True)
     ws = re.search(r"Workspace \(everything you make goes here\): (.+)", prompt).group(1).strip()
     game = re.search(r"Game folder \(READ ONLY[^)]*\): (.+)", prompt).group(1).strip()
-    by = os.path.join(ws, ".byear")
+    by = os.path.join(ws, ".holosii")
     src = os.path.join(game, "voice_en.wav")
     print(json.dumps({"type": "assistant", "message": {"content": [{"type": "tool_use", "name": "Bash",
           "input": {"command": "ls " + game}}], "usage": {"input_tokens": 100}}}), flush=True)

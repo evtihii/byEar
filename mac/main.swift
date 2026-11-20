@@ -1,4 +1,4 @@
-// наСлух (ByEar) — оболонка для macOS.
+// Голосій (Holosii) — оболонка для macOS.
 // Запускає server.py (якщо він ще не працює), показує сторінку у власному вікні (WKWebView)
 // і при виході (⌘Q) зупиняє сервер разом з агентом. Якщо сервер запустили окремо — не чіпає його.
 import Cocoa
@@ -6,8 +6,8 @@ import WebKit
 
 
 func serverDir() -> String {
-    // Тека з server.py: ключ ByEarServerDir в Info.plist, інакше — тека, де лежить ByEar.app
-    if let d = Bundle.main.object(forInfoDictionaryKey: "ByEarServerDir") as? String,
+    // Тека з server.py: ключ HolosiiServerDir в Info.plist, інакше — тека, де лежить Holosii.app
+    if let d = Bundle.main.object(forInfoDictionaryKey: "HolosiiServerDir") as? String,
        FileManager.default.fileExists(atPath: d + "/server.py") { return d }
     return Bundle.main.bundleURL.deletingLastPathComponent().path
 }
@@ -43,13 +43,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1320, height: 840),
                           styleMask: [.titled, .closable, .miniaturizable, .resizable],
                           backing: .buffered, defer: false)
-        window.title = "наСлух"
+        window.title = "Голосій"
         window.minSize = NSSize(width: 900, height: 560)
         window.contentView = web
         window.center()
-        window.setFrameAutosaveName("ByEarMain")
+        window.setFrameAutosaveName("HolosiiMain")
         window.makeKeyAndOrderFront(nil)
-        showMessage("Запускаю наСлух…")
+        showMessage("Запускаю Голосій…")
         start()
     }
 
@@ -91,7 +91,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
             DispatchQueue.main.async {
                 guard let self = self, self.server === proc else { return }
                 self.server = nil
-                self.showMessage("Сервер наСлуху зупинився (код \(proc.terminationStatus)).<br>Журнал: logs/app_server.log<br><br><a href='byear:restart'>Запустити знову</a>")
+                self.showMessage("Сервер Голосія зупинився (код \(proc.terminationStatus)).<br>Журнал: logs/app_server.log<br><br><a href='holosii:restart'>Запустити знову</a>")
             }
         }
         do { try p.run() } catch { showMessage("Не вдалося запустити python3: \(error.localizedDescription)"); return }
@@ -173,7 +173,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
     func webView(_ w: WKWebView, decidePolicyFor a: WKNavigationAction,
                  decisionHandler done: @escaping (WKNavigationActionPolicy) -> Void) {
         guard let u = a.request.url else { return done(.allow) }
-        if u.scheme == "byear" { done(.cancel); showMessage("Запускаю наСлух…"); start(); return }
+        if u.scheme == "holosii" { done(.cancel); showMessage("Запускаю Голосій…"); start(); return }
         if u.host == "localhost" || u.host == "127.0.0.1" || u.scheme == "about" || u.scheme == "data" { return done(.allow) }
         NSWorkspace.shared.open(u)
         done(.cancel)
@@ -191,13 +191,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
         func item(_ t: String, _ a: Selector?, _ k: String, _ mods: NSEvent.ModifierFlags = .command) -> NSMenuItem {
             let i = NSMenuItem(title: t, action: a, keyEquivalent: k); i.keyEquivalentModifierMask = mods; return i
         }
-        sub("наСлух", [
-            item("Про наСлух", #selector(NSApplication.orderFrontStandardAboutPanel(_:)), ""),
+        sub("Голосій", [
+            item("Про Голосій", #selector(NSApplication.orderFrontStandardAboutPanel(_:)), ""),
             .separator(),
-            item("Сховати наСлух", #selector(NSApplication.hide(_:)), "h"),
+            item("Сховати Голосій", #selector(NSApplication.hide(_:)), "h"),
             item("Сховати інші", #selector(NSApplication.hideOtherApplications(_:)), "h", [.command, .option]),
             .separator(),
-            item("Вийти з наСлуху", #selector(NSApplication.terminate(_:)), "q"),
+            item("Вийти з Голосія", #selector(NSApplication.terminate(_:)), "q"),
         ])
         // ⌘Z / ⌘F спершу отримує сторінка (там свої скасування й пошук); меню — запасний шлях
         sub("Редагування", [

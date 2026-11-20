@@ -1,4 +1,4 @@
-/* ByEar (наСлух) — стилі */
+/* Holosii (Голосій) — стилі */
 :root {
   color-scheme: light dark;
   --window: #ffffff;
@@ -370,7 +370,10 @@ textarea.comment:focus { box-shadow: 0 0 0 3px var(--accent-soft); border-color:
 @media (max-width: 1000px) { .app { grid-template-columns: 64px 200px 300px 1fr; } .pane { padding: 18px; } }
 /* ---------- головна ---------- */
 .homepane { display: none; grid-column: 3 / 5; overflow-y: auto; min-height: 0; background: var(--window); }
-.app.home .list, .app.home .detail { display: none; }
+.app.home .list, .app.home .detail, .app.home .sidebar { display: none; }
+.app.home { grid-template-columns: 64px 1fr; }      /* вибір проєкту й налаштування — на весь екран, лишається тільки смужка зліва */
+.app.home .homepane { grid-column: 2 / 3; }
+.home-top .qlink { display: inline-flex; align-items: center; gap: 6px; }
 .app.home .homepane { display: block; }
 .home-in { max-width: 920px; margin: 0 auto; padding: 48px 40px 60px; }
 .home-top { display: flex; align-items: center; gap: 16px; margin-bottom: 36px; }
@@ -450,3 +453,4 @@ textarea.comment:focus { box-shadow: 0 0 0 3px var(--accent-soft); border-color:
 .smsg .stime { font-size: 10px; color: var(--text3); }
 .scompose { display: flex; gap: 8px; margin-top: 10px; align-items: flex-end; }
 .scompose textarea { flex: 1; resize: vertical; min-height: 44px; font: inherit; font-size: 13px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--field-border); background: var(--window); color: var(--text); }
+.home-top .qlink .badge { background: var(--orange); color: #fff; font-size: 11px; font-weight: 600; border-radius: 9px; padding: 0 6px; line-height: 17px; }

@@ -1,4 +1,4 @@
-/* ByEar (наСлух) — контекстне меню по правому кліку: «Показати у Finder», «Відкрити теку».
+/* Holosii (Голосій) — контекстне меню по правому кліку: «Показати у Finder», «Відкрити теку».
    Звичайний (не модульний) скрипт: файли static/js/* вантажаться по черзі й ділять глобальну область. */
 /* ---------- диктування: запис голосу в сторінці → локальний Whisper на сервері → текст у коментар ---------- */
 S.dict = null;                                        // {available, reason, model_name, lang}
@@ -27,7 +27,7 @@ async function startDictation() {
   if (!S.dict || !S.dict.available) { toast("Диктування недоступне: " + ((S.dict && S.dict.reason) || "немає Whisper")); return; }
   let stream;
   try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
-  catch { toast("Немає доступу до мікрофона. Дозволь його для наСлуху: Системні параметри → Приватність і безпека → Мікрофон"); return; }
+  catch { toast("Немає доступу до мікрофона. Дозволь його для Голосія: Системні параметри → Приватність і безпека → Мікрофон"); return; }
   const type = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"].find((t) => window.MediaRecorder && MediaRecorder.isTypeSupported(t)) || "";
   const recorder = new MediaRecorder(stream, type ? { mimeType: type } : undefined);
   const chunks = [];

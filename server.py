@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""наСлух (англ. ByEar) — локальний плеєр для прослуховування реплік з ігор.
+"""Голосій (англ. Holosii) — локальний плеєр для прослуховування реплік з ігор.
 
-Запуск:  python3 server.py        (або подвійний клік по «ByEar.command»)
+Запуск:  python3 server.py        (або подвійний клік по «Holosii.command»)
 Відкриває http://localhost:8765 у браузері.
 
 Проєкти (ігри) записані в «projects.json» поруч зі скриптом.
@@ -32,7 +32,7 @@ FEEDBACK_NAME = "summary.json"
 STATE_FILE = os.path.join(os.environ.get("SLUHACH_DATA") or HERE, "state.json")   # останній відкритий проєкт тощо
 OLD_FEEDBACK_NAMES = ("відгук.json",)   # старі назви — переносяться в summary.json автоматично
 HOST = "127.0.0.1"
-# Порт: змінна PORT → "port" у settings.json → 8765 (ByEar.app читає той самий settings.json)
+# Порт: змінна PORT → "port" у settings.json → 8765 (Holosii.app читає той самий settings.json)
 PORT = int(os.environ.get("PORT") or agents.load_settings().get("port") or 8765)
 
 AUDIO_EXT = {".wav", ".mp3", ".m4a", ".aac", ".flac", ".ogg", ".opus", ".aif", ".aiff"}
@@ -320,7 +320,7 @@ def safe_join(root, rel):
 # ---------- HTTP ----------
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "ByEar/1.0"
+    server_version = "Holosii/1.0"
 
     def log_message(self, fmt, *args):
         pass  # тиша в Терміналі
@@ -526,7 +526,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         path, q = self.qs()
         if not self.allowed(post=True):
-            return self.error("Заборонено: запит не з наСлуху", 403)
+            return self.error("Заборонено: запит не з Голосія", 403)
         try:
             data = self.body_json()
         except json.JSONDecodeError:
@@ -739,12 +739,12 @@ class Handler(BaseHTTPRequestHandler):
                     return self.error("Такої теки гри немає: " + game)
                 ws = str(data.get("workspace") or "").strip()
                 ws = os.path.abspath(os.path.expanduser(ws)) if ws else \
-                    os.path.join(os.path.expanduser("~/ByEar"), setup_agent.slug(name or os.path.basename(game)))
+                    os.path.join(os.path.expanduser("~/Holosii"), setup_agent.slug(name or os.path.basename(game)))
                 if ws == game or ws.startswith(game + os.sep):
                     return self.error("Робоча тека не може бути всередині теки гри — туди нічого не пишемо")
                 if game.startswith(ws + os.sep):
                     return self.error("Робоча тека не може містити теку гри")
-                if os.path.isdir(ws) and os.listdir(ws) and not os.path.isdir(os.path.join(ws, ".byear")):
+                if os.path.isdir(ws) and os.listdir(ws) and not os.path.isdir(os.path.join(ws, ".holosii")):
                     return self.error("Робоча тека вже існує і не порожня — вибери іншу: " + ws)
                 listen = os.path.join(ws, "listen")
                 with lock:
@@ -809,7 +809,7 @@ def main():
     try:
         httpd = ThreadingHTTPServer((HOST, PORT), Handler)
     except OSError:
-        print(f"наСлух уже запущений — відкриваю {url}")
+        print(f"Голосій уже запущений — відкриваю {url}")
         webbrowser.open(url)
         return
     if not os.path.exists(PROJECTS_FILE):
@@ -818,11 +818,11 @@ def main():
     lim = agents.claude_limits()
     if not lim.get("available") or time.time() - (lim.get("seen") or 0) > 3600:
         agents.refresh_limits()                      # ліміти Claude застаріли — дізнатися у фоні
-    print(f"наСлух працює: {url}")
+    print(f"Голосій працює: {url}")
     print("Щоб зупинити — закрийте це вікно або натисніть Ctrl+C.")
     if "--no-open" not in sys.argv:
         threading.Timer(0.6, lambda: webbrowser.open(url)).start()
-    import signal                                    # додаток ByEar.app зупиняє сервер через SIGTERM
+    import signal                                    # додаток Holosii.app зупиняє сервер через SIGTERM
 
     def _term(*_):
         raise KeyboardInterrupt

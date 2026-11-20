@@ -1,4 +1,4 @@
-"""Server tests: run with `python3 -m unittest discover -s tests` from the ByEar folder.
+"""Server tests: run with `python3 -m unittest discover -s tests` from the repository folder.
 
 Each test class starts a real server.py on a free port with a temporary project, temporary data folder
 and tests/fake_agent.py instead of Claude Code. Requires ffmpeg / ffprobe.
@@ -38,7 +38,7 @@ class Server:
     """Temporary project + server process."""
 
     def __init__(self, fake_mode="edit", settings=None):
-        self.tmp = tempfile.mkdtemp(prefix="byear_test_")
+        self.tmp = tempfile.mkdtemp(prefix="holosii_test_")
         game = os.path.join(self.tmp, "game")
         a = os.path.join(game, "grp", "01_a")
         b = os.path.join(game, "grp", "02_b")
@@ -558,7 +558,7 @@ class ProjectSetup(unittest.TestCase):
         self.assertEqual(st, 200)
         self.assertEqual(raw[:4], b"RIFF")
         st, _ = self.s.get("/api/setup/file?p=" + pid + "&f=../../realgame/voice_en.wav")
-        self.assertEqual(st, 404)                    # nothing outside the workspace's .byear
+        self.assertEqual(st, 404)                    # nothing outside the workspace's .holosii
         self.s.post("/api/setup/start?p=" + pid, {"kind": "extract", "text": "тільки англійська"})
         sst = self.wait(pid, ("ready",))
         self.assertEqual(sst["result"]["lines"], 2)

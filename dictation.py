@@ -1,6 +1,6 @@
 """Dictation: speech → text with a local Whisper (whisper.cpp `whisper-cli`), nothing leaves the machine.
 
-ByEar records the reviewer's voice in the page, sends it here, and puts the text into the comment.
+Holosii records the reviewer's voice in the page, sends it here, and puts the text into the comment.
 Available only when `whisper-cli` is installed and a multilingual ggml model is found (English-only
 `*.en.bin` models cannot recognise Ukrainian). How to install: static/docs/whisper.html.
 """
@@ -73,7 +73,7 @@ def transcribe(ffmpeg, data, ext, settings):
         raise RuntimeError(st["reason"])
     if not ffmpeg:
         raise RuntimeError("Не знайдено ffmpeg")
-    tmp = tempfile.mkdtemp(prefix="byear_dict_")
+    tmp = tempfile.mkdtemp(prefix="holosii_dict_")
     try:
         src = os.path.join(tmp, "in" + (ext if ext.startswith(".") else "." + ext))
         wav = os.path.join(tmp, "in.wav")

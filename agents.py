@@ -1,10 +1,10 @@
-"""Черга правок і агенти Claude Code для наСлуху (ByEar), а також зміна гучності скриптом.
+"""Черга правок і агенти Claude Code для Голосія (Holosii), а також зміна гучності скриптом.
 
 Черга — «queue.json», налаштування — «settings.json»,
 журнали роботи — тека «logs/». Усе лежить поруч із сервером (або в SLUHACH_DATA для тестів).
 
-Агент один на запуск наСлуху: постійний процес Claude Code, правки йдуть йому по черзі.
-Розмір його контексту видно в наСлуху; «Стиснути» (/compact) або автоматично на порозі auto_compact_at.
+Агент один на запуск Голосія: постійний процес Claude Code, правки йдуть йому по черзі.
+Розмір його контексту видно в Голосії; «Стиснути» (/compact) або автоматично на порозі auto_compact_at.
 """
 import json
 import os
@@ -26,11 +26,11 @@ DATA = os.environ.get("SLUHACH_DATA") or HERE
 QUEUE_FILE = os.path.join(DATA, "queue.json")
 SETTINGS_FILE = os.path.join(DATA, "settings.json")
 LOGS_DIR = os.path.join(DATA, "logs")
-VOLUME_TRASH = os.path.expanduser("~/.Trash/ByEar_volume")
+VOLUME_TRASH = os.path.expanduser("~/.Trash/Holosii_volume")
 HISTORY_DIR = os.path.join(DATA, "history")      # версії файлів для «Скасувати» (⌘Z) і «Повторити» (⌘⇧Z)
 HISTORY_MAX = 30
 BEFORE_DIR = os.path.join(DATA, "before")        # версія файлу до правки агента (для «до / після»)
-OLD_LOGS_TRASH = os.path.expanduser("~/.Trash/ByEar_old_logs")
+OLD_LOGS_TRASH = os.path.expanduser("~/.Trash/Holosii_old_logs")
 KEEP_LOGS = 300                                  # журналів правок лишати
 KEEP_BEFORE = 150                                # копій «до правки» лишати
 AGENT_LOG_MAX = 5 * 1024 * 1024
@@ -41,7 +41,7 @@ DEFAULT_SETTINGS = {
     "auto_compact_at": 100000,       # стискати контекст, коли він більший (0 — лише вручну)
     "timeout_min": 25,               # максимум хвилин на одну правку
     "max_job_tokens": 1000000,       # ліміт токенів на одну правку (0 — без ліміту)
-    "port": 8765,                    # порт сервера (і ByEar.app); змінна PORT має перевагу
+    "port": 8765,                    # порт сервера (і Holosii.app); змінна PORT має перевагу
     "dictation_lang": "uk",          # мова диктування (Whisper)
     "whisper_model": "",             # шлях до моделі Whisper; порожньо — знайти найкращу в ~/.cache/whisper
     "dictation_prompt": "",          # підказка Whisper: імена й терміни, які треба писати правильно
@@ -211,7 +211,7 @@ def read_log(job_id, limit=12000):
 
 
 # ---------- агент ----------
-# Один агент Claude Code на один запуск наСлуху: постійний процесс `claude -p --input-format stream-json`,
+# Один агент Claude Code на один запуск Голосія: постійний процесс `claude -p --input-format stream-json`,
 # якому правки передаються по черзі. Він стартує в окремій теці (щоб не підвантажувати CLAUDE.md проєктів),
 # з 6 інструментами, без хуків і MCP — так стартовий контекст ~8 тис. токенів замість ~35 тис.
 
@@ -567,7 +567,7 @@ def _worker(find_project):
 
 # ---------- кредити сервісу генерації (ElevenLabs тощо) ----------
 # Проєкт може мати "usage_cmd": команда (список аргументів), що друкує JSON {"used", "limit", "reset"}.
-# Ключ API лишається в проєкті: наСлух лише запускає команду. Різниця «до / після» — ціна генерації правки.
+# Ключ API лишається в проєкті: Голосій лише запускає команду. Різниця «до / після» — ціна генерації правки.
 _usage_cache = {}
 USAGE_TTL = 120
 
@@ -598,7 +598,7 @@ def project_usage(project, fresh=False):
 
 # --- ліміти плану Claude ---
 # Claude Code сам повідомляє їх у потоці подій («rate_limit_event»): частка використаного 5-годинного й
-# тижневого вікна і коли воно скинеться. наСлух лише запам'ятовує останнє — вхід в акаунт не потрібен.
+# тижневого вікна і коли воно скинеться. Голосій лише запам'ятовує останнє — вхід в акаунт не потрібен.
 _limits_lock = threading.Lock()
 _limits_refreshing = False
 LIMITS_WINDOWS = ("five_hour", "seven_day", "seven_day_opus", "seven_day_sonnet")
@@ -752,7 +752,7 @@ def _rotate(folder, keep, skip=()):
 def rotate_logs():
     _rotate(LOGS_DIR, KEEP_LOGS, skip=("agent.log", "app_server.log"))
     _rotate(BEFORE_DIR, KEEP_BEFORE)
-    for name in ("agent.log",):                      # app_server.log ByEar.app перестворює сам
+    for name in ("agent.log",):                      # app_server.log Holosii.app перестворює сам
         f = os.path.join(LOGS_DIR, name)
         try:
             if os.path.getsize(f) > AGENT_LOG_MAX:
@@ -771,7 +771,7 @@ def start_workers(find_project, target_tags, source_tags):
         for j in q:
             if j["status"] == "running":
                 j["status"] = "queued"
-                j["note"] = "перезапущено після зупинки наСлуху"
+                j["note"] = "перезапущено після зупинки Голосія"
         save_queue(q)
     if CLAUDE:
         try:
@@ -857,7 +857,7 @@ def history_step(full, redo=False):
         tmp = full + ".tmp" + os.path.splitext(full)[1].lower()
         shutil.copyfile(snap, tmp)
         os.replace(tmp, full)
-        os.utime(full, None)                         # новий час — наСлух побачить, що файл змінився
+        os.utime(full, None)                         # новий час — Голосій побачить, що файл змінився
         try:
             os.remove(snap)
         except OSError:
@@ -867,7 +867,7 @@ def history_step(full, redo=False):
 
 
 def _backup(full, rel):
-    """Стару версію — у ~/.Trash/ByEar_volume/ (назва латиницею)."""
+    """Стару версію — у ~/.Trash/Holosii_volume/ (назва латиницею)."""
     os.makedirs(VOLUME_TRASH, exist_ok=True)
     safe = re.sub(r"[^A-Za-z0-9_.-]+", "_", rel.replace(os.sep, "__")).strip("_") or "file"
     shutil.copy2(full, os.path.join(VOLUME_TRASH, f"{time.strftime('%Y%m%d_%H%M%S')}_{safe}"))

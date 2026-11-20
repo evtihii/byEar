@@ -1,4 +1,4 @@
-/* ByEar (наСлух) — кнопки панелей і старт.
+/* Holosii (Голосій) — кнопки панелей і старт.
    Звичайний (не модульний) скрипт: файли static/js/* вантажаться по черзі й ділять глобальну область. */
 /* ---------- кнопки панелей ---------- */
 $("appIcon").innerHTML = I.headphones; $("queueIcon").innerHTML = I.queue;
@@ -32,7 +32,7 @@ function setSheetMode(m) {
 }
 function wsPlaceholder() {
   const n = ($("pName").value || $("pPath").value.split("/").pop() || "").replace(/[^A-Za-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 40);
-  $("pWs").placeholder = "~/ByEar/" + (n || "назва");
+  $("pWs").placeholder = "~/Holosii/" + (n || "назва");
 }
 $("pMode").addEventListener("click", (e) => { const b = e.target.closest("[data-mode]"); if (b) setSheetMode(b.dataset.mode); });
 $("pName").addEventListener("input", wsPlaceholder);
@@ -66,7 +66,7 @@ $("pickWsBtn").onclick = async () => {
 (async () => {
   await loadConfig();
   try { await loadProjects(); }
-  catch { $("rows").innerHTML = '<div class="empty">Сервер не відповідає. Запустіть «ByEar.command».</div>'; return; }
+  catch { $("rows").innerHTML = '<div class="empty">Сервер не відповідає. Запустіть «Holosii.command».</div>'; return; }
   let last = null;
   try { last = (await api("/api/state")).last_project || null; } catch {}
   last = last || ls.get("lastProject");

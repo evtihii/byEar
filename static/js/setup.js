@@ -1,4 +1,4 @@
-/* ByEar (наСлух) — налаштування проєкту з гри: окреме вікно з агентом налаштування.
+/* Holosii (Голосій) — налаштування проєкту з гри: окреме вікно з агентом налаштування.
    Звичайний (не модульний) скрипт: файли static/js/* вантажаться по черзі й ділять глобальну область. */
 const SETUP_STEPS = [
   ["survey", "Огляд гри"], ["plan", "План"], ["extract", "Видобування"], ["ready", "Готово"],
@@ -135,7 +135,7 @@ async function renderSetup(keepInput) {
   $("setupInput").addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); $("setupSend").click(); } });
   $("home").querySelectorAll("[data-sample]").forEach((x) => x.onclick = () => {
     stopAll();
-    const a = new Audio("/api/setup/file?p=" + encodeURIComponent(pid) + "&f=" + encodeURIComponent(x.dataset.sample.replace(/^\.?\/?(\.byear\/)?/, "")));
+    const a = new Audio("/api/setup/file?p=" + encodeURIComponent(pid) + "&f=" + encodeURIComponent(x.dataset.sample.replace(/^\.?\/?(\.holosii\/)?/, "")));
     S.setupAudio = a; a.play().catch((err) => toast("Не вдалося відтворити: " + err.message));
   });
   setupTimer = setTimeout(() => { if (S.view === "setup" && S.pid === pid) renderSetup(true); }, busy ? 2500 : 10000);

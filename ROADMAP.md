@@ -1,10 +1,10 @@
-# ByEar — roadmap
+# Holosii — roadmap
 
 Ideas for later: planned ahead, not implemented yet unless checked.
 
 ## 1. Project setup agent (first: it is where a project starts)
 Today the listening folders (`en.wav`, `ua.wav`, `текст.txt`) and the game pak are made by hand in a separate
-Claude chat. ByEar should do both ends itself.
+Claude chat. Holosii should do both ends itself.
 - [x] **“New project” window** (2026-11-20), opened when a project is created/opened — not the review window. Pick the game
   folder, or a folder that already has the audio.
 - [x] **Setup agent** (2026-11-20, `setup_agent.py`), separate from the fix agent (stronger model, its own token limit). It:
@@ -30,7 +30,7 @@ Claude chat. ByEar should do both ends itself.
 - [x] **Claude plan limits on the rail** (2026-11-20): how much of the 5-hour and the weekly window is used and
   when each resets (tooltip), a warning before sending a job at ≥ 90 % or when the limit is reached. Taken from
   Claude Code's own `rate_limit_event` in the agent stream and kept in `limits.json`; on start (if older than an
-  hour) or on click ByEar asks a tiny Haiku “ok” to refresh. No account login or token handling.
+  hour) or on click Holosii asks a tiny Haiku “ok” to refresh. No account login or token handling.
 - [ ] **Codex plan limits** the same way, once Codex is an agent.
 
 ## Originals in several languages
@@ -46,7 +46,7 @@ Claude chat. ByEar should do both ends itself.
   button does not appear.
 
 ## App
-- [x] **ByEar.app for macOS** (2026-11-19): a Swift shell around WKWebView (`mac/main.swift`, build with
+- [x] **Holosii.app for macOS** (2026-11-19): a Swift shell around WKWebView (`mac/main.swift`, build with
   `zsh mac/build.sh`). Starts `server.py --no-open` itself, ⌘Q stops the server and the agent; if a server
   is already running it only attaches and leaves it alone.
 - [ ] **Windows** (not now). Plan: the same thin shell in C# + WebView2. Before that, move the three
@@ -57,8 +57,8 @@ Claude chat. ByEar should do both ends itself.
 
 ## Quality and safety (found 2026-11-19)
 - [x] **Reject cross-site requests.** Host must be localhost/127.0.0.1/[::1] with our port; POSTs must come
-  from the ByEar page (Origin) and carry `application/json` — blocks CSRF and DNS rebinding.
-- [x] **Verify agent results automatically.** After each job ByEar measures pitch (f0), loudness (LUFS) and
+  from the Holosii page (Origin) and carry `application/json` — blocks CSRF and DNS rebinding.
+- [x] **Verify agent results automatically.** After each job Holosii measures pitch (f0), loudness (LUFS) and
   length of the new file, the version before the edit and the reference (`analysis.py`, no numpy), and flags
   large differences next to the agent's reply.
 - [x] **Previous version A/B.** The version an agent overwrote is kept (`before/`, pushed to undo history):
@@ -66,7 +66,7 @@ Claude chat. ByEar should do both ends itself.
 - [x] **Cost visible and capped.** Tokens/cost in the agent reply card; `max_job_tokens` in `settings.json`
   (default 1 000 000) stops a job that goes over.
 - [x] `index.html` split into `static/app.css` + `static/js/*.js`; server tests in `tests/`.
-- [x] Port from `settings.json` (`port`) or `PORT` (server and ByEar.app); old logs and “before” copies rotate
+- [x] Port from `settings.json` (`port`) or `PORT` (server and Holosii.app); old logs and “before” copies rotate
   to the Trash; language tags and names come from the server (`/api/config`), a project can add `lang_names`.
 - [x] **Generation cost per job** (2026-11-20): credits spent on the generation service (ElevenLabs) via the
   project's `usage_cmd`, shown in orange next to the Claude cost; remaining credits on the left rail.
@@ -82,12 +82,12 @@ Claude chat. ByEar should do both ends itself.
 - [ ] **Settings page in the app** instead of editing `settings.json` / `projects.json` by hand: agent model,
   token limit per job, auto-compact threshold, port, per-project reference language.
 - [ ] **Integrations with services** (ElevenLabs first; later other TTS / speech-to-text / LLM providers):
-  the reviewer just pastes an API key. ByEar then shows the credits left and the cost per job without a
+  the reviewer just pastes an API key. Holosii then shows the credits left and the cost per job without a
   per-project `usage_cmd` script.
   - Keys are stored only on this machine, in the macOS Keychain (not in the repo, not in project folders);
     the page never reads a key back, it only shows “connected” with the last 4 characters.
   - “Check connection” button; per-project choice of which integration counts the generation cost.
-  - The agent keeps using the project's own key file; the integration is for ByEar's own counters.
+  - The agent keeps using the project's own key file; the integration is for Holosii's own counters.
 
 ## Other
 - [x] Documentation link on the home page: `/docs/` served from `static/docs/` (2026-11-20).
