@@ -208,7 +208,7 @@ function renderDetail() {
     <div class="status-bar under">${Object.entries(STATUS).map(([k, s]) =>
       `<button class="sbtn ${k} ${e.status === k ? "on" : ""}" data-st="${k}"><span style="color:${s.color}">${I[k]}</span>${s.name}<kbd>${s.key}</kbd></button>`).join("")}
       <span id="jobChip"></span></div>
-    <div id="agentCard"></div>
+    <div class="cards2"><div id="agentCard"></div><div id="reviewCard"></div></div>
     ${it.text ? `<div class="section-label">Текст</div><div class="text">${esc(it.text)}</div>` : ""}
     <div class="keys">
       <kbd>E</kbd> англійська &nbsp; <kbd>J</kbd> японська &nbsp; <kbd>U</kbd> українська &nbsp; <kbd>A</kbd> усе по черзі &nbsp; <kbd>R</kbd> спочатку &nbsp; <kbd>Пробіл</kbd> пауза &nbsp; <kbd>↑</kbd><kbd>↓</kbd> фрази<br>
@@ -240,7 +240,7 @@ function renderDetail() {
   const nb = $("normBtn"); if (nb) nb.onclick = () => editAudio(it, "normalize");
   const sc = $("selClear"); if (sc) sc.onclick = () => { const p = editPlayer(); if (p) p.setSel(null); };
   const vi = $("volDb"); if (vi) vi.addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); changeVolume(it); } });
-  renderJobInfo();
+  renderJobInfo(); renderReviews(it.id);
   ta.addEventListener("blur", () => { clearTimeout(ct); if ((S.fb[it.id] || {}).comment !== ta.value && (ta.value || (S.fb[it.id] || {}).comment)) { setFb(it.id, { comment: ta.value }); updateRow(it.id); } });
   pane.scrollTop = 0;
 }

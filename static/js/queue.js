@@ -110,6 +110,13 @@ function jobLine(j) {
   const icon = j.status === "running" ? '<span class="spin"></span>' : j.status === "queued" ? I.clock : "";
   return `<span class="chip ${j.status === "running" ? "run" : j.status === "error" ? "err" : ""}" style="color:${c}">${icon}${n}</span>`;
 }
+/* «Коментарі» — пише лише старша модель / оркестратор у <проєкт>/reviews.json; тут тільки читання */
+function renderReviews(id) {
+  const box = $("reviewCard"); if (!box) return;
+  const list = (S.reviews || {})[id] || [];
+  box.innerHTML = list.length ? `<div class="agent-card review"><div class="h">КОМЕНТАРІ</div>${list.map((r) =>
+    `<div class="rv"><span class="rvm">${esc(r.by || "оркестратор")}${r.time ? " · " + esc(String(r.time).slice(5, 16).replace("T", " ")) : ""}</span>${esc(r.text)}</div>`).join("")}</div>` : "";
+}
 function renderJobInfo() {
   const chip = $("jobChip"), card = $("agentCard"); if (!chip || !card || !S.sel) return;
   const a = activeJob(S.sel), l = lastJob(S.sel);

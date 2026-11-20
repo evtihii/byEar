@@ -179,6 +179,7 @@ async function openProject(pid, keepSel) {
   S.byId = new Map(S.items.map((it) => [it.id, it]));
   S.fb = data.feedback || {};
   S.folders = data.folders || {};
+  S.reviews = data.reviews || {};
   // незбережені зміни з браузера мають пріоритет
   S.pending = ls.get("pending." + pid, {});
   for (const [id, e] of Object.entries(S.pending)) { if (e) S.fb[id] = e; else delete S.fb[id]; }

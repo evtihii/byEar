@@ -456,3 +456,10 @@ textarea.comment:focus { box-shadow: 0 0 0 3px var(--accent-soft); border-color:
 .home-top .qlink .badge { background: var(--orange); color: #fff; font-size: 11px; font-weight: 600; border-radius: 9px; padding: 0 6px; line-height: 17px; }
 .regen-row .btn { display: inline-flex; align-items: center; gap: 6px; }
 .regen-row .btn svg { color: var(--accent); }
+/* відповідь агента й коментарі оркестратора — поруч, по 50 % */
+.cards2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
+.cards2 > div:empty { display: none; }
+.cards2:has(> div:empty) { grid-template-columns: 1fr; }
+.agent-card.review { border-left: 3px solid var(--accent); }
+.agent-card.review .rv { margin-top: 6px; }
+.agent-card.review .rvm { display: block; font-size: 11px; color: var(--text3); }

@@ -429,7 +429,13 @@ class Handler(BaseHTTPRequestHandler):
                 items, notes = scan(p["path"])
                 with lock:
                     fbd = check_ready_folders(p, items)
-                self.send_json({"project": p, "items": items, "notes": notes,
+                # коментарі старшої моделі / оркестратора: <проєкт>/reviews.json, у застосунку лише для читання
+                try:
+                    with open(os.path.join(p["path"], "reviews.json"), encoding="utf-8") as rf:
+                        reviews = json.load(rf)
+                except (OSError, ValueError):
+                    reviews = {}
+                self.send_json({"project": p, "items": items, "notes": notes, "reviews": reviews,
                                 "feedback": fbd["items"], "folders": fbd.get("folders") or {}})
             elif path == "/api/queue":
                 self.send_json(agents.queue_state())
