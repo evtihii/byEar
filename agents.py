@@ -45,6 +45,9 @@ DEFAULT_SETTINGS = {
     "dictation_lang": "uk",          # мова диктування (Whisper)
     "whisper_model": "",             # шлях до моделі Whisper; порожньо — знайти найкращу в ~/.cache/whisper
     "dictation_prompt": "",          # підказка Whisper: імена й терміни, які треба писати правильно
+    "setup_model": "claude-opus-5-5",  # агент налаштування проєкту (видобування з гри) — сильніша модель
+    "setup_max_tokens": 5000000,     # ліміт токенів на один крок налаштування (0 — без ліміту)
+    "setup_timeout_min": 180,        # максимум хвилин на один крок налаштування
 }
 OBSOLETE = ("workers", "reset_after")
 TOOLS = "Bash,Read,Write,Edit,Glob,Grep"

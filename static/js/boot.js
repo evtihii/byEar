@@ -2,7 +2,7 @@
    Звичайний (не модульний) скрипт: файли static/js/* вантажаться по черзі й ділять глобальну область. */
 /* ---------- кнопки панелей ---------- */
 $("appIcon").innerHTML = I.headphones; $("queueIcon").innerHTML = I.queue;
-$("backIcon").innerHTML = I.back; $("homeIcon").innerHTML = I.house;
+$("backIcon").innerHTML = I.back; $("projIcon").innerHTML = I.back; $("homeIcon").innerHTML = I.house;
 $("railAgIcon").innerHTML = I.spark; $("compactIcon").innerHTML = I.compress; $("restartIcon").innerHTML = I.restart;
 $("searchIcon").innerHTML = I.search;
 $("addBtn").innerHTML = I.plus; $("removeBtn").innerHTML = I.minus; $("rescanBtn").innerHTML = I.refresh;
@@ -17,12 +17,33 @@ $("removeBtn").onclick = async () => {
   await api("/api/projects/remove", { id: p.id }); S.pid = null; ls.del("lastProject");
   await loadProjects(); if (S.projects[0]) openProject(S.projects[0].id); else { S.items = []; S.project = null; $("rows").innerHTML = ""; $("foldersBlock").hidden = true; renderDetail(); renderSaveState(); }
 };
-function openSheet() { $("pName").value = ""; $("pPath").value = ""; $("pErr").textContent = ""; $("sheetBack").classList.add("show"); setTimeout(() => $("pName").focus(), 30); }
+const SHEET_HINT = {
+  game: "Вкажи теку гри — агент налаштування знайде в ній озвучку, покаже план і зразки, а після твого «так» видобуде фрази в робочу теку. Гру він не змінює.",
+  folder: "Тека, де вже лежать фрази (en.wav, ua.wav, текст.txt). Позначки й коментарі збережуться в «summary.json» у цій теці.",
+};
+function setSheetMode(m) {
+  S.sheetMode = m;
+  $("pMode").querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.mode === m));
+  $("pHint").textContent = SHEET_HINT[m];
+  $("pPathLbl").textContent = m === "game" ? "Тека гри" : "Тека зі звуками";
+  $("pWsField").hidden = m !== "game";
+  $("okBtn").textContent = m === "game" ? "Створити" : "Додати";
+  wsPlaceholder();
+}
+function wsPlaceholder() {
+  const n = ($("pName").value || $("pPath").value.split("/").pop() || "").replace(/[^A-Za-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 40);
+  $("pWs").placeholder = "~/ByEar/" + (n || "назва");
+}
+$("pMode").addEventListener("click", (e) => { const b = e.target.closest("[data-mode]"); if (b) setSheetMode(b.dataset.mode); });
+$("pName").addEventListener("input", wsPlaceholder);
+function openSheet() { $("pName").value = ""; $("pPath").value = ""; $("pWs").value = ""; $("pErr").textContent = ""; setSheetMode(S.sheetMode || "game"); $("sheetBack").classList.add("show"); setTimeout(() => $("pName").focus(), 30); }
 function closeSheet() { $("sheetBack").classList.remove("show"); }
 async function addProject() {
   $("pErr").textContent = "";
   try {
-    const r = await api("/api/projects/add", { name: $("pName").value, path: $("pPath").value });
+    const r = S.sheetMode === "game"
+      ? await api("/api/projects/add", { name: $("pName").value, game: $("pPath").value, workspace: $("pWs").value })
+      : await api("/api/projects/add", { name: $("pName").value, path: $("pPath").value });
     closeSheet(); await loadProjects(); openProject(r.id);
   } catch (err) { $("pErr").textContent = err.message; }
 }
@@ -32,9 +53,13 @@ $("okBtn").onclick = addProject;
 $("sheetBack").addEventListener("mousedown", (e) => { if (e.target === $("sheetBack")) closeSheet(); });
 $("pickBtn").onclick = async () => {
   try {
-    const r = await api("/api/pick-folder", {});
-    if (r.path) { $("pPath").value = r.path; if (!$("pName").value) $("pName").value = r.path.split("/").pop(); }
+    const r = await api("/api/pick-folder", { prompt: S.sheetMode === "game" ? "Виберіть теку гри" : "Виберіть теку зі звуками" });
+    if (r.path) { $("pPath").value = r.path; if (!$("pName").value) $("pName").value = r.path.split("/").pop(); wsPlaceholder(); }
   } catch (err) { $("pErr").textContent = err.message; }
+};
+$("pickWsBtn").onclick = async () => {
+  try { const r = await api("/api/pick-folder", { prompt: "Виберіть робочу теку проєкту" }); if (r.path) $("pWs").value = r.path; }
+  catch (err) { $("pErr").textContent = err.message; }
 };
 
 /* ---------- старт ---------- */

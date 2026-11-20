@@ -5,17 +5,18 @@ Ideas for later: planned ahead, not implemented yet unless checked.
 ## 1. Project setup agent (first: it is where a project starts)
 Today the listening folders (`en.wav`, `ua.wav`, `текст.txt`) and the game pak are made by hand in a separate
 Claude chat. ByEar should do both ends itself.
-- [ ] **“New project” window**, opened when a project is created/opened — not the review window. Pick the game
+- [x] **“New project” window** (2026-11-20), opened when a project is created/opened — not the review window. Pick the game
   folder, or a folder that already has the audio.
-- [ ] **Setup agent**, separate from the fix agent (stronger model, its own token limit). It:
+- [x] **Setup agent** (2026-11-20, `setup_agent.py`), separate from the fix agent (stronger model, its own token limit). It:
   - finds the engine and audio middleware (Unreal / Unity, Wwise / FMOD …) and shows a plan before extracting
     anything: how many lines per language, a few samples to listen to;
   - after “yes”, extracts the lines into the listening structure (one folder per line, originals in every
     language the game has, transcript);
   - writes the project's own `extract` and `pack` scripts and its `projects.json` entry.
-- [ ] **Recipes.** The SILENT HILL f path (UE5 pak → Wwise event `.bnk` → media id → `.wem` → wav, Japanese in
+- [x] **Recipes** (`recipes/`). The SILENT HILL f path (UE5 pak → Wwise event `.bnk` → media id → `.wem` → wav, Japanese in
   its own folder, `.bnk` size fields patched on pack) becomes the first recipe; the agent starts from a known
   recipe instead of from zero. New engines become new recipes once someone has gone through them.
+- [x] **Back to projects** (2026-11-20): “← Проєкти” in the setup window and above the phrase list.
 - [ ] **“Embed” button** that runs the project's `pack` with the checks done by hand today: diff against the
   previous build, decode every changed file, refuse while the game is running, old pak to the Trash.
 - Limits: the user's own copy of the game, mods for personal use. The agent does not look for encryption keys

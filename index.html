@@ -47,6 +47,7 @@
   <section class="list">
     <div class="toolbar">
       <button class="back-btn" id="backBtn" hidden title="Повернутись туди, звідки прийшов (Esc)"><span id="backIcon"></span>Назад</button>
+      <button class="back-btn" id="projBtn" title="До списку проєктів: відкрити інший або створити новий"><span id="projIcon"></span>Проєкти</button>
       <label class="search"><span id="searchIcon"></span><input id="q" type="search" placeholder="Пошук у назвах і тексті" autocomplete="off" spellcheck="false"></label>
     </div>
     <div class="filters"><div class="seg" id="filters"></div></div>
@@ -67,10 +68,14 @@
 <div class="sheet-back" id="sheetBack">
   <div class="sheet" role="dialog" aria-modal="true">
     <h3>Новий проєкт</h3>
-    <p>Виберіть папку гри зі звуком. Позначки й коментарі збережуться в «summary.json» у цій папці (один файл на гру).</p>
+    <div class="seg pmode" id="pMode"><button data-mode="game" class="on">З гри</button><button data-mode="folder">Тека зі звуками</button></div>
+    <p id="pHint"></p>
     <div class="field"><label for="pName">Назва</label><input id="pName" placeholder="Наприклад, Resident Evil"></div>
-    <div class="field"><label for="pPath">Папка</label>
+    <div class="field"><label for="pPath" id="pPathLbl">Тека гри</label>
       <div class="path-row"><input id="pPath" placeholder="/Users/…/папка" spellcheck="false"><button class="btn" id="pickBtn">Вибрати…</button></div>
+    </div>
+    <div class="field" id="pWsField"><label for="pWs">Робоча тека</label>
+      <div class="path-row"><input id="pWs" placeholder="~/ByEar/назва" spellcheck="false"><button class="btn" id="pickWsBtn">Вибрати…</button></div>
     </div>
     <div class="err" id="pErr"></div>
     <div class="actions"><button class="btn" id="cancelBtn">Скасувати</button><button class="btn primary" id="okBtn">Додати</button></div>
@@ -84,6 +89,7 @@
 <script src="/static/js/keys.js"></script>
 <script src="/static/js/queue.js"></script>
 <script src="/static/js/home.js"></script>
+<script src="/static/js/setup.js"></script>
 <script src="/static/js/boot.js"></script>
 <script src="/static/js/menu.js"></script>
 </body>

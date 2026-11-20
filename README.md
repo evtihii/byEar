@@ -43,6 +43,12 @@ Project fields:
   generation cost; the remaining credits appear on the left rail. API keys stay in the project — ByEar
   never reads them.
 
+**A project straight from a game.** “New project → From a game” opens a setup window with its own agent
+(`setup_agent.py`, Opus by default): it surveys the game folder (read-only), shows a plan with sample lines, and
+after your “yes” extracts every voice line into `listen/` and writes the project's `tools/extract.py`,
+`tools/pack.py` and `BRIEF.md`. What it knows about engines lives in `recipes/` (Unreal + Wwise first). It never
+looks for encryption keys or bypasses protection. “← Проєкти” takes you back to the project list from anywhere.
+
 The left rail also shows the **Claude plan limits**: how much of the 5-hour window is used (big number) and of
 the week (below), with reset times in the tooltip. ByEar takes them from Claude Code's own stream
 (`rate_limit_event`), so it never touches your login; click the block to refresh. Before a job is sent at

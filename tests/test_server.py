@@ -514,6 +514,82 @@ class Dictation(unittest.TestCase):
             s.close()
 
 
+class ProjectSetup(unittest.TestCase):
+    """New project from a game: survey → plan → extraction → open as a normal project."""
+    @classmethod
+    def setUpClass(cls):
+        cls.s = Server("edit")
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.s.close()
+
+    def add(self, name, game_name):
+        game = os.path.join(self.s.tmp, game_name)
+        os.makedirs(game, exist_ok=True)
+        tone(os.path.join(game, "voice_en.wav"), 220)
+        ws = os.path.join(self.s.tmp, "ws_" + game_name)
+        st, r = self.s.post("/api/projects/add", {"name": name, "game": game, "workspace": ws})
+        self.assertEqual(st, 200, r)
+        return r["id"], game, ws
+
+    def wait(self, pid, until, timeout=20):
+        for _ in range(int(timeout * 10)):
+            st, d = self.s.get("/api/setup?p=" + pid)
+            if not d["setup"]["running"] and d["setup"]["state"] in until:
+                return d["setup"]
+            time.sleep(0.1)
+        self.fail(f"setup did not reach {until}: {d['setup']['state']}")
+
+    def test_full_flow(self):
+        pid, game, ws = self.add("Гра", "realgame")
+        st, projects = self.s.get("/api/projects")
+        p = next(x for x in projects if x["id"] == pid)
+        self.assertEqual(p["setup"]["state"], "new")
+        self.assertEqual(p["path"], os.path.join(ws, "listen"))
+        # extraction before a plan is refused
+        st, r = self.s.post("/api/setup/start?p=" + pid, {"kind": "extract"})
+        self.assertEqual(st, 400)
+        self.s.post("/api/setup/start?p=" + pid, {"kind": "survey"})
+        sst = self.wait(pid, ("plan",))
+        self.assertEqual(sst["plan"]["languages"][0]["lines"], 2)
+        self.assertTrue(any(m["role"] == "agent" for m in sst["messages"]))
+        st, raw = self.s.get("/api/setup/file?p=" + pid + "&f=samples/01_en.wav")
+        self.assertEqual(st, 200)
+        self.assertEqual(raw[:4], b"RIFF")
+        st, _ = self.s.get("/api/setup/file?p=" + pid + "&f=../../realgame/voice_en.wav")
+        self.assertEqual(st, 404)                    # nothing outside the workspace's .byear
+        self.s.post("/api/setup/start?p=" + pid, {"kind": "extract", "text": "тільки англійська"})
+        sst = self.wait(pid, ("ready",))
+        self.assertEqual(sst["result"]["lines"], 2)
+        self.s.post("/api/setup/start?p=" + pid, {"kind": "talk", "text": "привіт"})
+        sst = self.wait(pid, ("ready",))
+        self.assertIn("привіт", sst["messages"][-2]["text"])
+        st, r = self.s.post("/api/setup/finish?p=" + pid, {})
+        self.assertEqual(st, 200, r)
+        st, projects = self.s.get("/api/projects")
+        p = next(x for x in projects if x["id"] == pid)
+        self.assertEqual(p["setup"]["state"], "done")
+        self.assertEqual(p["agent_brief"], os.path.join(ws, "BRIEF.md"))
+        self.assertEqual(p["pack_cmd"][-1], ws + "/tools/pack.py")
+        st, d = self.s.get("/api/project?p=" + pid)
+        self.assertEqual(len(d["items"]), 2)
+        self.assertEqual(os.listdir(game), ["voice_en.wav"])      # the game folder is untouched
+
+    def test_blocked_and_bad_folders(self):
+        pid, game, ws = self.add("Locked", "LOCKEDgame")
+        self.s.post("/api/setup/start?p=" + pid, {"kind": "survey"})
+        sst = self.wait(pid, ("blocked",))
+        self.assertTrue(sst["plan"]["blocked"])
+        st, r = self.s.post("/api/setup/start?p=" + pid, {"kind": "extract"})
+        self.assertEqual(st, 400)
+        # the workspace may not be inside the game folder
+        st, r = self.s.post("/api/projects/add", {"name": "x", "game": game, "workspace": os.path.join(game, "ws")})
+        self.assertEqual(st, 400)
+        st, r = self.s.post("/api/projects/add", {"name": "x", "game": os.path.join(self.s.tmp, "nope")})
+        self.assertEqual(st, 400)
+
+
 class Pitch(unittest.TestCase):
     def test_pitch_of_tones(self):
         import agents

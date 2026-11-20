@@ -8,13 +8,13 @@ function renderHome() {
     <div class="pcard ${p.exists ? "" : "missing"}" data-open="${p.id}" title="${esc(p.path)}">
       <div class="pt"><span class="gi">${I.game}</span>${esc(p.name)}${p.id === last ? '<span class="last">ОСТАННІЙ</span>' : ""}</div>
       <div class="pp">${esc(p.path)}${p.exists ? "" : " — теки немає"}</div>
-      <div class="ps">
+      ${p.setup && p.setup.state !== "done" ? `<div class="ps"><span style="color:var(--accent)">${p.setup.running ? '<span class="spin"></span>' : "⚙"} Налаштування: ${esc(SETUP_STATE[p.setup.state] || p.setup.state)}</span></div>` : `<div class="ps">
         <span title="Прослухано">${I.headphones} <b>${p.heard || 0}</b></span>
         <span title="Готово" style="color:var(--green)">✓ <b>${p.ok || 0}</b></span>
         <span title="Виправити" style="color:var(--orange)">✎ <b>${p.fix || 0}</b></span>
         ${p.ready_folders ? `<span title="Теки, готові до вбудовування" style="color:var(--orange)">${I.box} <b>${p.ready_folders}</b></span>` : ""}
         ${p.embedded_folders ? `<span title="Вбудовані теки" style="color:var(--green)">${I.embtri} <b>${p.embedded_folders}</b></span>` : ""}
-      </div>
+      </div>`}
       ${p.last_change ? `<div class="pp">Остання позначка: ${esc(fdate(p.last_change))}</div>` : ""}
     </div>`).join("");
   $("home").innerHTML = `<div class="home-in">
@@ -29,7 +29,7 @@ $("home").addEventListener("click", async (e) => {
   if (e.target.closest("#homeAdd")) { openSheet(); return; }
   const c = e.target.closest("[data-open]"); if (!c) return;
   const id = c.dataset.open;
-  if (id === S.pid && S.project) setView("phrases", { restore: false }); else await openProject(id);
+  if (id === S.pid && S.project && !inSetup(id)) setView("phrases", { restore: false }); else await openProject(id);
 });
 const AG_ST = { stopped: "зупинено", starting: "запуск…", idle: "вільний", working: "працює", compacting: "стискає…", error: "помилка" };
 function kfmt(n) { return n == null ? "—" : n >= 1000 ? Math.round(n / 1000) + "к" : String(n); }
@@ -66,13 +66,18 @@ function setView(v, opts = {}) {
   }
   S.view = v;
   $("backBtn").hidden = v !== "queue";
-  document.querySelector(".app").classList.toggle("home", v === "home");
+  $("projBtn").hidden = v === "queue";
+  document.querySelector(".app").classList.toggle("home", v === "home" || v === "setup");
   $("homeRow").classList.toggle("sel", v === "home");
+  if (v === "setup") {
+    stopAll(); $("queueRow").classList.remove("sel"); $("foldersBlock").hidden = true;
+    renderProjects(); renderSetup(); return;
+  }
   if (v === "home") {
     stopAll(); $("queueRow").classList.remove("sel");
     $("projects").querySelectorAll(".sel").forEach((x) => x.classList.remove("sel"));
     $("folders").querySelectorAll(".sel").forEach((x) => x.classList.remove("sel"));
-    renderHome(); return;
+    renderHome(); loadProjects().catch(() => {}); return;
   }
   $("queueRow").classList.toggle("sel", v === "queue");
   document.querySelector(".filters").style.display = v === "queue" ? "none" : "";
@@ -86,7 +91,8 @@ function setView(v, opts = {}) {
     if (back && back.scroll != null) $("rows").scrollTop = back.scroll; else scrollToSel("center");
   }
 }
-function goBack() { if (S.view === "queue") setView(S.back && S.back.view === "home" ? "home" : "phrases"); }
+function goBack() { if (S.view === "queue") setView(S.back && (S.back.view === "home" || S.back.view === "setup") ? S.back.view : "phrases"); }
+$("projBtn").onclick = () => setView("home");
 $("backBtn").onclick = goBack;
 $("queueRow").onclick = () => (S.view === "queue" ? goBack() : setView("queue"));
 $("homeRow").onclick = () => setView("home");

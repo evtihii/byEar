@@ -133,13 +133,14 @@ function renderProjects() {
   el.innerHTML = S.projects.map((p) => `
     <div class="side-row ${p.id === S.pid ? "sel" : ""} ${p.exists ? "" : "missing"}" data-pid="${p.id}" title="${esc(p.path)}">
       <span class="ic">${I.game}</span><span class="nm">${esc(p.name)}</span>
-      ${p.fix ? `<span class="badge" title="Позначено «виправити»">${p.fix}</span>` : ""}
+      ${inSetup(p.id) ? `<span class="badge setup" title="Налаштування проєкту не завершено">${p.setup.running ? '<span class="spin"></span>' : "⚙"}</span>` : p.fix ? `<span class="badge" title="Позначено «виправити»">${p.fix}</span>` : ""}
     </div>`).join("");
   $("removeBtn").disabled = !S.pid;
 }
 $("projects").addEventListener("click", (e) => {
   const r = e.target.closest("[data-pid]"); if (!r) return;
-  if (S.view === "home") { if (r.dataset.pid === S.pid) { setView("phrases", { restore: false }); return; } }
+  if (S.view === "home" && r.dataset.pid === S.pid) { setView(inSetup(S.pid) ? "setup" : "phrases", { restore: false }); return; }
+  if (S.view === "setup" && r.dataset.pid === S.pid) return;
   if (S.view === "queue") { setView("phrases"); if (r.dataset.pid === S.pid) return; }   // той самий проєкт — як «Назад»
   if (r.dataset.pid !== S.pid) openProject(r.dataset.pid);
 });
@@ -150,12 +151,20 @@ $("projects").addEventListener("dblclick", async (e) => {
   if (name && name.trim()) { await api("/api/projects/rename", { id: p.id, name }); await loadProjects(); }
 });
 
+/* проєкт з гри, налаштування якого ще не завершено → вікно налаштування замість списку фраз */
+function inSetup(pid) { const p = S.projects.find((x) => x.id === pid); return !!(p && p.setup && p.setup.state !== "done"); }
 async function openProject(pid, keepSel) {
   stopAll();
   S.pid = pid; ls.set("lastProject", pid);
   api("/api/state", { last_project: pid }).catch(() => {});
+  if (inSetup(pid)) {
+    S.project = null; S.items = []; S.byId = new Map(); $("foldersBlock").hidden = true;
+    renderProjects();
+    if (S.view === "setup") renderSetup(); else setView("setup");
+    return;
+  }
   loadUsage(false);
-  if (S.view === "home") setView("phrases", { restore: false });
+  if (S.view === "home" || S.view === "setup") setView("phrases", { restore: false });
   renderProjects();
   $("rows").innerHTML = '<div class="empty">Читаю папку…</div>';
   $("pane").innerHTML = "";

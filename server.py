@@ -20,6 +20,7 @@ import webbrowser
 
 import agents
 import dictation
+import setup_agent
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, unquote, urlparse
 
@@ -41,7 +42,8 @@ MIME = {
     ".aif": "audio/aiff", ".aiff": "audio/aiff",
 }
 # Мітки мови/версії у назвах файлів: en.wav, ua.wav, Line_010_en.mp3 ...
-SOURCE_TAGS = ["en", "eng", "orig", "original", "src", "ref", "ja", "jp", "jpn", "old"]
+SOURCE_TAGS = ["en", "eng", "orig", "original", "src", "ref", "ja", "jp", "jpn", "old",
+               "ko", "zh", "fr", "de", "es", "it", "pt", "pl"]
 TARGET_TAGS = ["ua", "uk", "ukr", "new"]
 TAGS = "|".join(SOURCE_TAGS + TARGET_TAGS)
 # Синоніми мов → один код (для вибору еталона): eng → en, jp/jpn → ja, uk/ukr → ua
@@ -407,7 +409,10 @@ class Handler(BaseHTTPRequestHandler):
                     fbd = load_feedback(p) if os.path.isdir(p["path"]) else {"items": {}}
                     fb = fbd["items"]
                     fl = fbd.get("folders") or {}
-                    out.append({**p, "exists": os.path.isdir(p["path"]), "agent": agents.agent_ready(p),
+                    sst = setup_agent.load(p["workspace"]) if p.get("workspace") else None
+                    if sst:
+                        sst = {"state": sst["state"], "running": sst["running"]}
+                    out.append({**p, "exists": os.path.isdir(p["path"]), "agent": agents.agent_ready(p), "setup": sst,
                                 "ok": sum(1 for v in fb.values() if v.get("status") == "ok"),
                                 "heard": sum(1 for v in fb.values() if v.get("heard") or v.get("status")),
                                 "ready_folders": sum(1 for v in fl.values() if v.get("ready") and not (v.get("embedded") and v["embedded"] >= v["ready"])),
@@ -438,6 +443,21 @@ class Handler(BaseHTTPRequestHandler):
                 if not p:
                     return self.error("Проєкт не знайдено", 404)
                 self.send_json({"usage": agents.project_usage(p, fresh=q.get("fresh") == "1")})
+            elif path == "/api/setup":
+                # стан налаштування проєкту з гри: крок, повідомлення агента, план, результат
+                p = find_project(q.get("p", ""))
+                if not p or not p.get("workspace"):
+                    return self.error("Це не проєкт з гри", 404)
+                st = setup_agent.load(p["workspace"])
+                st["recipes"] = setup_agent.recipes()
+                self.send_json({"project": {k: p.get(k) for k in ("id", "name", "game_dir", "workspace", "path")},
+                                "setup": st})
+            elif path == "/api/setup/file":
+                p = find_project(q.get("p", ""))
+                full = setup_agent.safe_file(p["workspace"], q.get("f", "")) if p and p.get("workspace") else None
+                if not full:
+                    return self.error("Не знайдено", 404)
+                return self.send_file(full)
             elif path == "/api/limits":
                 # ліміти плану Claude (5 год / тиждень), останні відомі
                 self.send_json(agents.claude_limits())
@@ -682,6 +702,60 @@ class Handler(BaseHTTPRequestHandler):
                 except (RuntimeError, subprocess.TimeoutExpired) as e:
                     return self.error(str(e))
                 self.send_json({"ok": True, "text": text})
+            elif path in ("/api/setup/start", "/api/setup/stop", "/api/setup/finish", "/api/setup/reveal"):
+                p = find_project(q.get("p", ""))
+                if not p or not p.get("workspace"):
+                    return self.error("Це не проєкт з гри", 404)
+                ws = p["workspace"]
+                if path == "/api/setup/start":
+                    kind = str(data.get("kind") or "")
+                    if kind not in ("survey", "extract", "talk"):
+                        return self.error("Невідомий крок")
+                    err = setup_agent.start(ws, kind, str(data.get("text") or "")[:4000])
+                    if err:
+                        return self.error(err)
+                    self.send_json({"ok": True})
+                elif path == "/api/setup/stop":
+                    self.send_json({"ok": setup_agent.stop(ws)})
+                elif path == "/api/setup/reveal":
+                    subprocess.run(["open", ws])             # робоча тека у Finder
+                    self.send_json({"ok": True})
+                else:
+                    extra, err = setup_agent.finish(ws)
+                    if err:
+                        return self.error(err)
+                    with lock:
+                        projects = load_projects()
+                        for x in projects:
+                            if x["id"] == p["id"]:
+                                x.update(extra)
+                        save_projects(projects)
+                    self.send_json({"ok": True})
+            elif path == "/api/projects/add" and data.get("game"):
+                # проєкт з гри: робоча тека + агент налаштування
+                name = str(data.get("name") or "").strip()
+                game = os.path.abspath(os.path.expanduser(str(data.get("game") or "").strip()))
+                if not os.path.isdir(game):
+                    return self.error("Такої теки гри немає: " + game)
+                ws = str(data.get("workspace") or "").strip()
+                ws = os.path.abspath(os.path.expanduser(ws)) if ws else \
+                    os.path.join(os.path.expanduser("~/ByEar"), setup_agent.slug(name or os.path.basename(game)))
+                if ws == game or ws.startswith(game + os.sep):
+                    return self.error("Робоча тека не може бути всередині теки гри — туди нічого не пишемо")
+                if game.startswith(ws + os.sep):
+                    return self.error("Робоча тека не може містити теку гри")
+                if os.path.isdir(ws) and os.listdir(ws) and not os.path.isdir(os.path.join(ws, ".byear")):
+                    return self.error("Робоча тека вже існує і не порожня — вибери іншу: " + ws)
+                listen = os.path.join(ws, "listen")
+                with lock:
+                    projects = load_projects()
+                    if any(x["path"] == listen for x in projects):
+                        return self.error("Цей проєкт уже є у списку")
+                    setup_agent.create(ws, game, name or os.path.basename(game))
+                    projects.append({"name": name or os.path.basename(game), "path": listen, "agent_cwd": ws,
+                                     "workspace": ws, "game_dir": game})
+                    save_projects(projects)
+                self.send_json({"ok": True, "id": project_id(listen)})
             elif path == "/api/projects/add":
                 name = str(data.get("name") or "").strip()
                 folder = os.path.abspath(os.path.expanduser(str(data.get("path") or "").strip()))
@@ -710,7 +784,7 @@ class Handler(BaseHTTPRequestHandler):
             elif path == "/api/pick-folder":
                 script = ('tell application "System Events" to activate\n'
                           'tell application "System Events" to return POSIX path of '
-                          '(choose folder with prompt "Виберіть папку проєкту")')
+                          '(choose folder with prompt "' + str(data.get("prompt") or "Виберіть папку проєкту").replace('"', "'").replace("\\", "/")[:80] + '")')
                 r = subprocess.run(["osascript", "-e", script], capture_output=True, text=True)
                 folder = r.stdout.strip().rstrip("/")
                 self.send_json({"path": folder} if r.returncode == 0 and folder else {"path": None})
