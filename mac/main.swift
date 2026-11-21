@@ -24,6 +24,18 @@ func serverPort() -> Int {
 let port = serverPort()
 let baseURL = URL(string: "http://localhost:\(port)/")!
 
+// Ключ доступу, який створює server.py (читати його може лише цей користувач); сторінку відкриваємо з ?t=ключ
+func accessToken() -> String {
+    let f = FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent("Library/Application Support/Holosii/token")
+    return ((try? String(contentsOf: f, encoding: .utf8)) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+}
+
+// Лише сам Голосій (localhost з нашим портом), а не інші локальні сервери
+func isOurs(host: String?, port p: Int?) -> Bool {
+    (host == "localhost" || host == "127.0.0.1") && p == port
+}
+
 final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNavigationDelegate {
     var window: NSWindow!
     var web: WKWebView!
@@ -55,7 +67,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
 
     // ---------- сервер ----------
     func ping(_ done: @escaping (Bool) -> Void) {
-        var r = URLRequest(url: baseURL.appendingPathComponent("api/state"))
+        var r = URLRequest(url: baseURL.appendingPathComponent("api/ping"))
         r.timeoutInterval = 0.8
         URLSession.shared.dataTask(with: r) { _, resp, _ in
             done((resp as? HTTPURLResponse)?.statusCode == 200)
@@ -110,7 +122,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
         }
     }
 
-    func load() { web.load(URLRequest(url: baseURL)) }
+    func load() {
+        var c = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)!
+        c.queryItems = [URLQueryItem(name: "t", value: accessToken())]
+        web.load(URLRequest(url: c.url!))
+    }
 
     func showMessage(_ html: String) {
         let page = """
@@ -136,8 +152,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
     func webView(_ w: WKWebView, requestMediaCapturePermissionFor origin: WKSecurityOrigin,
                  initiatedByFrame f: WKFrameInfo, type: WKMediaCaptureType,
                  decisionHandler: @escaping (WKPermissionDecision) -> Void) {
-        let local = origin.host == "localhost" || origin.host == "127.0.0.1"
-        decisionHandler(local && type == .microphone ? .grant : .deny)
+        decisionHandler(isOurs(host: origin.host, port: origin.port) && type == .microphone ? .grant : .deny)
     }
 
     // ---------- WebKit: діалоги, посилання ----------
@@ -174,7 +189,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
                  decisionHandler done: @escaping (WKNavigationActionPolicy) -> Void) {
         guard let u = a.request.url else { return done(.allow) }
         if u.scheme == "holosii" { done(.cancel); showMessage("Запускаю Голосій…"); start(); return }
-        if u.host == "localhost" || u.host == "127.0.0.1" || u.scheme == "about" || u.scheme == "data" { return done(.allow) }
+        if isOurs(host: u.host, port: u.port) || u.scheme == "about" || u.scheme == "data" { return done(.allow) }
         NSWorkspace.shared.open(u)
         done(.cancel)
     }

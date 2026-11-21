@@ -127,11 +127,31 @@ goes over `max_job_tokens` is stopped.
 - `model` — agent model; `timeout_min` — minutes per job; `max_job_tokens` — token limit per job;
 - `auto_compact_at` — compact the agent's context above this size;
 - `port` — server port (default 8765; the `PORT` environment variable wins). Holosii.app reads the same file.
+- `agent_sandbox` (default `false`) — run the agents' Bash in Claude Code's sandbox (macOS / Linux; not available
+  on native Windows): writes only to the project folders, the agent's work folder, `$TMPDIR` and the trash;
+  network only to `agent_sandbox_domains` (default `["api.elevenlabs.io"]`); a command that needs more fails
+  instead of running unsandboxed. Turn it on once your project's tools work inside it.
 
 ## Security
 
-The server listens on 127.0.0.1 only and refuses requests whose Host is not localhost, POSTs from other
-origins and non-JSON POSTs, so a web page open in your browser cannot queue jobs for the agent.
+The fix agent runs shell commands as you, so the server guards who can reach it:
+
+- **Other websites:** the server listens on 127.0.0.1 only and refuses requests whose Host is not localhost
+  (DNS rebinding), POSTs from other origins and non-JSON POSTs (CSRF), so a page open in your browser cannot
+  queue jobs for the agent.
+- **Other programs and other users of this computer:** every request except the page shell and `/api/ping`
+  needs an access key. The server creates it once in a file only you can read
+  (`~/Library/Application Support/Holosii/token` on macOS, `%LOCALAPPDATA%\Holosii\token` on Windows).
+  Holosii.app / Holosii.exe and `python3 server.py` open the page as `/?t=<key>`; the server turns it into an
+  `HttpOnly; SameSite=Strict` cookie and redirects to `/`. A tab without the key shows how to open Holosii.
+  To revoke all sessions delete the file and restart the server. **After updating, rebuild Holosii.app**
+  (`zsh mac/build.sh`) — older builds do not send the key.
+- **The page:** strict Content-Security-Policy (own scripts only, no framing), `nosniff`,
+  `Cross-Origin-Resource-Policy: same-origin`; POST bodies are capped at 64 MB.
+- **The app windows** grant the microphone and open pages only for Holosii's own `localhost:<port>`; any other
+  link, including other local servers, opens in the default browser.
+- **The agents** read game files and line texts, which could try to steer them (prompt injection). Turn on
+  `agent_sandbox` to keep their Bash inside the project folders and an allow-list of domains.
 
 ## Tests
 

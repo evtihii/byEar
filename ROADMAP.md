@@ -58,6 +58,11 @@ Claude chat. Holosii should do both ends itself.
     Bin sweep, the fix agent with Claude Code for Windows (Git Bash), project setup step stop.
   - [ ] Installer that ships Python and ffmpeg (now they are installed separately).
   - [ ] Recipes and `BRIEF.md` files assume macOS tools in places (`python3`, CrossOver paths) — review for Windows.
+- [x] **Security review fixes** (2026-11-21): access key for every request (file readable only by the user →
+  `/?t=` → HttpOnly cookie), CSP / nosniff / CORP headers, 64 MB POST cap, app windows trust only Holosii's own
+  port, `open_folder` never runs a file, opt-in `agent_sandbox` (Claude Code sandbox, macOS / Linux).
+  - [ ] Turn `agent_sandbox` on by default once the regen / ElevenLabs flow is checked inside it.
+  - [ ] Pin GitHub Actions to commit SHAs.
 - [ ] English UI (the interface is Ukrainian for now).
 
 ## Quality and safety (found 2026-11-19)

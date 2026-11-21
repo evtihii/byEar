@@ -59,5 +59,69 @@ class PlatformTest(unittest.TestCase):
         self.assertEqual(out.strip(), "stopped")
 
 
+class ClaudeSettingsTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix="holosii_cs_")
+        import agents
+        self.agents = agents
+        self._data = agents.DATA
+        agents.DATA = self.tmp
+
+    def tearDown(self):
+        self.agents.DATA = self._data
+        import shutil
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def read(self, settings):
+        import json
+        path, note = self.agents.write_claude_settings(settings)
+        with open(path, encoding="utf-8") as f:
+            return json.load(f), note
+
+    def test_default_no_sandbox(self):
+        cfg, note = self.read({})
+        self.assertEqual(cfg, {"disableAllHooks": True})
+        self.assertEqual(note, "")
+
+    def test_sandbox_opt_in(self):
+        cfg, note = self.read({"agent_sandbox": True, "agent_sandbox_domains": ["api.example.com"]})
+        if platform_util.IS_WIN:
+            self.assertNotIn("sandbox", cfg)
+            self.assertIn("Windows", note)
+            return
+        sb = cfg["sandbox"]
+        self.assertTrue(sb["enabled"] and sb["failIfUnavailable"])
+        self.assertFalse(sb["allowUnsandboxedCommands"])
+        self.assertEqual(sb["network"]["allowedDomains"], ["api.example.com"])
+        self.assertIn(platform_util.trash_root(), sb["filesystem"]["allowWrite"])
+
+
+class TokenTest(unittest.TestCase):
+    def test_token_created_once_and_private(self):
+        with tempfile.TemporaryDirectory() as t:
+            f = os.path.join(t, "sub", "token")
+            a = platform_util.load_token(f)
+            self.assertGreaterEqual(len(a), 32)
+            self.assertEqual(platform_util.load_token(f), a)
+            if not platform_util.IS_WIN:
+                self.assertEqual(os.stat(f).st_mode & 0o077, 0)
+                os.chmod(f, 0o644)
+                platform_util.load_token(f)
+                self.assertEqual(os.stat(f).st_mode & 0o077, 0)
+
+    def test_open_folder_never_runs_a_file(self):
+        calls = []
+        orig = platform_util.reveal
+        platform_util.reveal = calls.append
+        try:
+            with tempfile.NamedTemporaryFile(suffix=".bat", delete=False) as f:
+                name = f.name
+            platform_util.open_folder(name)               # a file → only shown selected, never opened
+            self.assertEqual(calls, [os.path.abspath(name)])
+        finally:
+            platform_util.reveal = orig
+            os.remove(name)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -13,6 +13,7 @@ Linux is not a target, but the POSIX branches work there too (xdg-open, zenity i
 """
 import json
 import os
+import secrets
 import shutil
 import signal
 import subprocess
@@ -31,6 +32,43 @@ SWEEP_DAYS = 7          # Windows: Holosii trash entries older than this go to t
 def _env_dir(var, *rest):
     base = os.environ.get(var)
     return os.path.join(base, *rest) if base else None
+
+
+# ---------- per-user folder and access key ----------
+
+def user_dir():
+    """Per-user folder other accounts on this computer cannot read (the access key lives here)."""
+    if IS_WIN:
+        return os.path.join(os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"), "Holosii")
+    if IS_MAC:
+        return os.path.expanduser("~/Library/Application Support/Holosii")
+    return os.path.join(os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share"), "holosii")
+
+
+def load_token(path):
+    """The server's access key: created once (random, 256 bit), readable by this user only.
+
+    The app shells read the same file and open the page with ?t=<key>; the server then keeps it in a cookie.
+    On Windows %LOCALAPPDATA% is already private to the user; on POSIX the file is 0600 in a 0700 folder.
+    """
+    d = os.path.dirname(path)
+    os.makedirs(d, mode=0o700, exist_ok=True)
+    try:
+        with open(path, encoding="utf-8") as f:
+            tok = f.read().strip()
+        if len(tok) >= 32:
+            if not IS_WIN and os.stat(path).st_mode & 0o077:
+                os.chmod(path, 0o600)
+            return tok
+    except OSError:
+        pass
+    tok = secrets.token_urlsafe(32)
+    tmp = f"{path}.{os.getpid()}.tmp"
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write(tok)
+    os.replace(tmp, path)
+    return tok
 
 
 # ---------- trash ----------
@@ -123,7 +161,10 @@ def reveal(path):
 
 
 def open_folder(path):
+    """Open a folder in Finder / Explorer. Only folders: on Windows os.startfile would *run* a file."""
     path = os.path.abspath(path)
+    if not os.path.isdir(path):
+        return reveal(path)
     if IS_WIN:
         try:
             os.startfile(path)                       # noqa: S606 — a folder, opens in Explorer

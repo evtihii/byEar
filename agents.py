@@ -49,6 +49,9 @@ DEFAULT_SETTINGS = {
     "setup_model": "claude-opus-5-5",  # агент налаштування проєкту (видобування з гри) — сильніша модель
     "setup_max_tokens": 5000000,     # ліміт токенів на один крок налаштування (0 — без ліміту)
     "setup_timeout_min": 180,        # максимум хвилин на один крок налаштування
+    # Пісочниця Claude Code для Bash агентів (macOS / Linux): писати лише в теки проєкту, мережа — лише ці домени
+    "agent_sandbox": False,
+    "agent_sandbox_domains": ["api.elevenlabs.io"],
 }
 OBSOLETE = ("workers", "reset_after")
 TOOLS = "Bash,Read,Write,Edit,Glob,Grep"
@@ -89,6 +92,33 @@ def load_settings():
 
 
 which = platform_util.which                      # PATH + Homebrew / winget / scoop / npm folders
+
+
+def write_claude_settings(settings):
+    """agent_settings.json для агентів Claude Code: без хуків; з agent_sandbox — Bash у пісочниці.
+
+    У пісочниці Bash пише лише в робочу теку, теки --add-dir (проєкт, гра), $TMPDIR і кошик Голосія;
+    мережа — лише agent_sandbox_domains; без пісочниці команда не виконається (allowUnsandboxedCommands).
+    На Windows пісочниці Claude Code немає — налаштування там не діє (видно в журналі агента).
+    Повертає шлях до файлу і примітку для журналу ('' якщо нічого казати)."""
+    path = os.path.join(DATA, "agent_settings.json")
+    cfg = {"disableAllHooks": True}
+    note = ""
+    if settings.get("agent_sandbox"):
+        if platform_util.IS_WIN:
+            note = "agent_sandbox: на Windows пісочниці Claude Code немає — Bash агента без обмежень"
+        else:
+            cfg["sandbox"] = {
+                "enabled": True,
+                "failIfUnavailable": True,              # не працювати мовчки без пісочниці
+                "autoAllowBashIfSandboxed": True,
+                "allowUnsandboxedCommands": False,      # агент не може попросити «без пісочниці»
+                "filesystem": {"allowWrite": [platform_util.trash_root()]},
+                "network": {"allowedDomains": [str(d) for d in settings.get("agent_sandbox_domains") or []]},
+            }
+            note = "пісочниця Bash увімкнена (agent_sandbox)"
+    _write_json(path, cfg)
+    return path, note
 
 CLAUDE = os.environ.get("SLUHACH_CLAUDE") or which("claude")
 FFMPEG = which("ffmpeg")
@@ -240,8 +270,7 @@ class Agent:
         self.stop()
         cwd = os.path.join(DATA, "agent_workdir")
         os.makedirs(cwd, exist_ok=True)
-        sett = os.path.join(DATA, "agent_settings.json")
-        _write_json(sett, {"disableAllHooks": True})
+        sett, sandbox_note = write_claude_settings(settings)
         cmd = [CLAUDE, "-p", "--model", settings["model"], "--input-format", "stream-json",
                "--output-format", "stream-json", "--verbose", "--permission-mode", "acceptEdits",
                "--tools", TOOLS, "--allowedTools", TOOLS, "--settings", sett, "--strict-mcp-config", "--no-chrome"]
@@ -285,7 +314,7 @@ class Agent:
         self.started = _now()
         self.error = None
         self.state = "idle"
-        self._log(f"=== {_now()} агент запущено, модель {settings['model']}")
+        self._log(f"=== {_now()} агент запущено, модель {settings['model']}" + (f"; {sandbox_note}" if sandbox_note else ""))
 
     def stop(self):
         if self.alive():
@@ -644,7 +673,7 @@ def refresh_limits(wait=False):
         try:
             cwd = os.path.join(DATA, "agent_workdir")
             os.makedirs(cwd, exist_ok=True)
-            _write_json(os.path.join(DATA, "agent_settings.json"), {"disableAllHooks": True})
+            write_claude_settings(load_settings())
             p = subprocess.run([CLAUDE, "-p", "--model", "haiku", "--output-format", "stream-json", "--verbose",
                                 "--tools", "", "--strict-mcp-config", "--no-chrome", "--no-session-persistence",
                                 "--settings", os.path.join(DATA, "agent_settings.json")],

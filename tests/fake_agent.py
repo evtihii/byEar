@@ -13,6 +13,8 @@ import subprocess
 import sys
 
 mode = os.environ.get("FAKE_MODE", "edit")
+for _s in (sys.stdin, sys.stdout):                   # like Claude Code: UTF-8 pipes (Windows defaults to cp1252)
+    _s.reconfigure(encoding="utf-8")
 
 
 def say(text):

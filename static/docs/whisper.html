@@ -108,11 +108,11 @@ curl -L -o ~/.cache/whisper/ggml-large-v3-turbo-q5_0.bin \
   </div>
 </main>
 <script>
-fetch("/api/dictation").then((r) => r.json()).then((d) => {
+fetch("/api/dictation").then((r) => r.ok ? r.json() : Promise.reject(r.status)).then((d) => {
   const s = document.getElementById("status");
   if (d.available) { s.textContent = `готово — модель ${d.model_name}, мова ${d.lang}`; s.style.color = "var(--ok)"; }
   else { s.textContent = d.reason || "недоступно"; s.style.color = "var(--warn)"; }
-}).catch(() => { document.getElementById("status").textContent = "Голосій не запущено"; });
+}).catch((e) => { document.getElementById("status").textContent = e === 401 ? "відкрийте цю сторінку з Голосія" : "Голосій не запущено"; });
 </script>
 </body>
 </html>

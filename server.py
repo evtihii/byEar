@@ -9,6 +9,7 @@
 Сервер слухає лише 127.0.0.1 — ззовні до нього не достукатись.
 """
 import hashlib
+import hmac
 import json
 import os
 import re
@@ -22,6 +23,7 @@ import agents
 import dictation
 import platform_util
 import setup_agent
+from http.cookies import CookieError, SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, unquote, urlparse
 
@@ -35,6 +37,20 @@ OLD_FEEDBACK_NAMES = ("відгук.json",)   # старі назви — пер
 HOST = "127.0.0.1"
 # Порт: змінна PORT → "port" у settings.json → 8765 (Holosii.app читає той самий settings.json)
 PORT = int(os.environ.get("PORT") or agents.load_settings().get("port") or 8765)
+# Ключ доступу: лише той, хто може прочитати цей файл (ви, Holosii.app / Holosii.exe), відкриє Голосій.
+# Інші програми й інші користувачі цього комп'ютера до сервера не достукаються.
+TOKEN_FILE = os.path.join(os.environ.get("SLUHACH_DATA") or platform_util.user_dir(), "token")
+TOKEN = platform_util.load_token(TOKEN_FILE)
+COOKIE = f"holosii_{PORT}"
+MAX_BODY = 64 * 1024 * 1024                      # найбільший POST (диктування — до ~10 МБ)
+# сторінка Голосія: лише власні скрипти, жодних сторонніх ресурсів, не вбудовується в чужі сайти
+PAGE_CSP = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; "
+            "media-src 'self' blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; "
+            "form-action 'none'; frame-ancestors 'none'")
+LOCKED_PAGE = """<!doctype html><meta charset="utf-8"><title>Голосій</title>
+<body style="font:15px -apple-system,'Segoe UI',sans-serif;color:#666;display:grid;place-items:center;height:90vh;text-align:center">
+<div><b>Голосій працює, але ця вкладка не має ключа доступу.</b><br><br>
+Відкрийте Голосій через програму (Holosii.app / Holosii.exe)<br>або запустіть server.py ще раз — він відкриє браузер з ключем.</div>"""
 
 AUDIO_EXT = {".wav", ".mp3", ".m4a", ".aac", ".flac", ".ogg", ".opus", ".aif", ".aiff"}
 MIME = {
@@ -338,9 +354,32 @@ class Handler(BaseHTTPRequestHandler):
     def error(self, msg, code=400):
         self.send_json({"error": msg}, code)
 
+    def end_headers(self):
+        self.send_header("X-Content-Type-Options", "nosniff")          # файли не вгадуються як HTML/скрипт
+        self.send_header("Cross-Origin-Resource-Policy", "same-origin")  # чужий сайт не вбудує наші файли
+        self.send_header("Referrer-Policy", "no-referrer")
+        super().end_headers()
+
     def body_json(self):
         n = int(self.headers.get("Content-Length") or 0)
         return json.loads(self.rfile.read(n) or b"{}") if n else {}
+
+    def authed(self):
+        """Чи є в запиті наш ключ доступу (cookie, яку ставить /?t=<ключ>)."""
+        try:
+            c = SimpleCookie(self.headers.get("Cookie") or "").get(COOKIE)
+        except CookieError:
+            return False
+        return bool(c) and hmac.compare_digest(c.value.encode(), TOKEN.encode())
+
+    def send_page(self, body, code=200, csp=PAGE_CSP):
+        self.send_response(code)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Content-Security-Policy", csp)
+        self.end_headers()
+        self.wfile.write(body)
 
     def qs(self):
         u = urlparse(self.path)
@@ -358,6 +397,11 @@ class Handler(BaseHTTPRequestHandler):
         if host not in hosts:
             return False
         if post:
+            try:
+                if int(self.headers.get("Content-Length") or 0) > MAX_BODY:
+                    return False
+            except ValueError:
+                return False
             origin = self.headers.get("Origin")
             if origin is not None and origin.lower() not in {"http://" + h for h in hosts}:
                 return False
@@ -371,16 +415,28 @@ class Handler(BaseHTTPRequestHandler):
         path, q = self.qs()
         if not self.allowed():
             return self.error("Заборонено", 403)
+        public = path in ("/", "/index.html", "/api/ping") or path.startswith(("/static/", "/docs/"))
+        if not public and not self.authed():
+            return self.error("Немає ключа доступу: відкрийте Голосій через програму або запустіть server.py ще раз", 401)
         try:
-            if path in ("/", "/index.html"):
-                with open(PAGE_FILE, "rb") as f:
-                    body = f.read()
-                self.send_response(200)
-                self.send_header("Content-Type", "text/html; charset=utf-8")
-                self.send_header("Content-Length", str(len(body)))
+            if path == "/api/ping":
+                # перевірка «чи це Голосій і чи він живий» — для Holosii.app / Holosii.exe, без даних
+                self.send_json({"app": "holosii"})
+            elif path in ("/", "/index.html") and q.get("t"):
+                # ключ з посилання → cookie, і одразу на адресу без ключа (щоб він не лишався в історії)
+                if not hmac.compare_digest(q["t"].encode(), TOKEN.encode()):
+                    return self.send_page(LOCKED_PAGE.encode("utf-8"), 403)
+                self.send_response(303)
+                self.send_header("Set-Cookie", f"{COOKIE}={TOKEN}; Path=/; HttpOnly; SameSite=Strict; Max-Age=31536000")
+                self.send_header("Location", "/")
+                self.send_header("Content-Length", "0")
                 self.send_header("Cache-Control", "no-store")
                 self.end_headers()
-                self.wfile.write(body)
+            elif path in ("/", "/index.html"):
+                if not self.authed():
+                    return self.send_page(LOCKED_PAGE.encode("utf-8"), 401)
+                with open(PAGE_FILE, "rb") as f:
+                    self.send_page(f.read())
             elif path.startswith("/static/") or path.startswith("/docs/"):
                 # стилі й скрипти сторінки (static/app.css, static/js/*.js) і документація (/docs/ → static/docs/)
                 rel = path[len("/static/"):] if path.startswith("/static/") else "docs/" + (path[len("/docs/"):] or "index.html")
@@ -535,6 +591,8 @@ class Handler(BaseHTTPRequestHandler):
         path, q = self.qs()
         if not self.allowed(post=True):
             return self.error("Заборонено: запит не з Голосія", 403)
+        if not self.authed():
+            return self.error("Немає ключа доступу: відкрийте Голосій через програму або запустіть server.py ще раз", 401)
         try:
             data = self.body_json()
         except json.JSONDecodeError:
@@ -821,11 +879,12 @@ class Handler(BaseHTTPRequestHandler):
 def main():
     platform_util.utf8_console()
     url = f"http://localhost:{PORT}"
+    open_url = f"{url}/?t={TOKEN}"                   # з ключем доступу (у консоль ключ не друкуємо)
     try:
         httpd = ThreadingHTTPServer((HOST, PORT), Handler)
     except OSError:
         print(f"Голосій уже запущений — відкриваю {url}")
-        webbrowser.open(url)
+        webbrowser.open(open_url)
         return
     if not os.path.exists(PROJECTS_FILE):
         save_projects([])
@@ -836,7 +895,7 @@ def main():
     print(f"Голосій працює: {url}")
     print("Щоб зупинити — закрийте це вікно або натисніть Ctrl+C.")
     if "--no-open" not in sys.argv:
-        threading.Timer(0.6, lambda: webbrowser.open(url)).start()
+        threading.Timer(0.6, lambda: webbrowser.open(open_url)).start()
     # Holosii.app зупиняє сервер через SIGTERM, Holosii.exe — закриваючи stdin (--stdin-stop)
     platform_util.on_terminate(lambda: threading.Thread(target=httpd.shutdown, daemon=True).start())
     try:

@@ -39,6 +39,15 @@ sealed class MainForm : Form
     static readonly string AppData = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Holosii");
 
+    // Ключ доступу, який створює server.py у %LOCALAPPDATA%\Holosii (інші користувачі його не прочитають)
+    static string AccessToken()
+    {
+        try { return File.ReadAllText(Path.Combine(AppData, "token")).Trim(); }
+        catch (Exception) { return ""; }
+    }
+
+    string StartUrl() => baseUri.AbsoluteUri + "?t=" + Uri.EscapeDataString(AccessToken());
+
     public MainForm()
     {
         port = ServerPort(dir);
@@ -106,7 +115,7 @@ sealed class MainForm : Form
         // мікрофон для диктування (запис у сторінці → Whisper на сервері) — лише для localhost
         core.PermissionRequested += (_, e) =>
         {
-            var local = IsLocal(e.Uri);
+            var local = IsOurs(e.Uri);
             if (e.PermissionKind == CoreWebView2PermissionKind.Microphone)
                 e.State = local ? CoreWebView2PermissionState.Allow : CoreWebView2PermissionState.Deny;
             else if (e.PermissionKind == CoreWebView2PermissionKind.ClipboardRead && local)
@@ -123,7 +132,7 @@ sealed class MainForm : Form
                 BeginInvoke(new Action(async () => { ShowMessage("Запускаю Голосій…"); await Start(); }));
                 return;
             }
-            if (IsLocal(u) || u.StartsWith("about:") || u.StartsWith("data:")) return;
+            if (IsOurs(u) || u.StartsWith("about:") || u.StartsWith("data:")) return;
             e.Cancel = true;
             OpenExternal(u);
         };
@@ -131,9 +140,9 @@ sealed class MainForm : Form
         await Start();
     }
 
-    static bool IsLocal(string uri) =>
-        Uri.TryCreate(uri, UriKind.Absolute, out var u) &&
-        (u.Scheme == "http" || u.Scheme == "https") &&
+    // Лише сам Голосій (localhost з нашим портом), а не інші локальні сервери
+    bool IsOurs(string uri) =>
+        Uri.TryCreate(uri, UriKind.Absolute, out var u) && u.Scheme == "http" && u.Port == port &&
         (u.Host == "localhost" || u.Host == "127.0.0.1" || u.Host == "[::1]");
 
     static void OpenExternal(string uri)
@@ -155,17 +164,17 @@ sealed class MainForm : Form
 
     async Task<bool> Ping()
     {
-        try { return (await http.GetAsync(new Uri(baseUri, "api/state"))).IsSuccessStatusCode; }
+        try { return (await http.GetAsync(new Uri(baseUri, "api/ping"))).IsSuccessStatusCode; }
         catch (Exception) { return false; }
     }
 
     async Task Start()
     {
-        if (await Ping()) { web.CoreWebView2.Navigate(baseUri.AbsoluteUri); return; }
+        if (await Ping()) { web.CoreWebView2.Navigate(StartUrl()); return; }
         if (!LaunchServer()) return;
         for (var i = 0; i < 80 && server != null; i++)
         {
-            if (await Ping()) { web.CoreWebView2.Navigate(baseUri.AbsoluteUri); return; }
+            if (await Ping()) { web.CoreWebView2.Navigate(StartUrl()); return; }
             await Task.Delay(250);
         }
         if (server != null) ShowMessage("Сервер не відповідає. Журнал: logs\\app_server.log");

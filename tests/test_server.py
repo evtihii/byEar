@@ -85,6 +85,10 @@ class Server:
     def req(self, method, path, body=None, headers=None):
         c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=30)
         h = {"Host": f"localhost:{self.port}"}
+        tf = os.path.join(self.data, "token")         # ключ доступу, який сервер створює в SLUHACH_DATA
+        if os.path.exists(tf):
+            with open(tf, encoding="utf-8") as f:
+                h["Cookie"] = f"holosii_{self.port}={f.read().strip()}"
         data = None
         if body is not None:
             data = body if isinstance(body, (bytes, str)) else json.dumps(body)
@@ -153,6 +157,56 @@ class SecurityAndPages(unittest.TestCase):
         # a cross-site page can send text/plain without a CORS preflight — must be refused
         st, _ = self.s.post("/api/state", '{"last_project": "x"}', headers={"Content-Type": "text/plain"})
         self.assertEqual(st, 403)
+
+    def test_no_key_rejected(self):
+        # без ключа доступу (інша програма чи інший користувач цього комп'ютера) — нічого не можна
+        no = {"Cookie": ""}
+        self.assertEqual(self.s.get("/api/projects", headers=no)[0], 401)
+        self.assertEqual(self.s.get(f"/file?p={self.s.pid}&f=grp/01_a/en.wav", headers=no)[0], 401)
+        self.assertEqual(self.s.post("/api/state", {"last_project": "x"}, headers=no)[0], 401)
+        self.assertEqual(self.s.post("/api/queue/add", {}, headers={"Cookie": f"holosii_{self.s.port}=wrong"})[0], 401)
+        st, body = self.s.get("/", headers=no)
+        self.assertEqual(st, 401)
+        self.assertIn("ключа доступу".encode(), body)
+        self.assertEqual(self.s.get("/api/ping", headers=no), (200, {"app": "holosii"}))
+
+    def test_key_link_sets_cookie(self):
+        with open(os.path.join(self.s.data, "token"), encoding="utf-8") as f:
+            tok = f.read().strip()
+        if os.name != "nt":
+            self.assertEqual(os.stat(os.path.join(self.s.data, "token")).st_mode & 0o077, 0)
+        c = http.client.HTTPConnection("127.0.0.1", self.s.port, timeout=10)
+        c.request("GET", "/?t=" + tok, headers={"Host": f"localhost:{self.s.port}"})
+        r = c.getresponse()
+        r.read()
+        self.assertEqual(r.status, 303)
+        self.assertEqual(r.getheader("Location"), "/")
+        ck = r.getheader("Set-Cookie")
+        self.assertIn(f"holosii_{self.s.port}={tok}", ck)
+        self.assertIn("HttpOnly", ck)
+        self.assertIn("SameSite=Strict", ck)
+        self.assertEqual(self.s.get("/?t=wrong", headers={"Cookie": ""})[0], 403)
+
+    def test_security_headers(self):
+        c = http.client.HTTPConnection("127.0.0.1", self.s.port, timeout=10)
+        c.request("GET", "/", headers={"Host": f"localhost:{self.s.port}",
+                                       "Cookie": self._cookie()})
+        r = c.getresponse()
+        r.read()
+        self.assertEqual(r.status, 200)
+        self.assertIn("script-src 'self'", r.getheader("Content-Security-Policy"))
+        self.assertIn("frame-ancestors 'none'", r.getheader("Content-Security-Policy"))
+        self.assertEqual(r.getheader("X-Content-Type-Options"), "nosniff")
+        self.assertEqual(r.getheader("Cross-Origin-Resource-Policy"), "same-origin")
+
+    def test_huge_body_rejected(self):
+        st, _ = self.s.req("POST", "/api/state", headers={"Content-Type": "application/json",
+                                                           "Content-Length": str(200 * 1024 * 1024)}, body=b"{}")
+        self.assertEqual(st, 403)
+
+    def _cookie(self):
+        with open(os.path.join(self.s.data, "token"), encoding="utf-8") as f:
+            return f"holosii_{self.s.port}={f.read().strip()}"
 
     def test_own_origin_allowed(self):
         st, _ = self.s.post("/api/state", {"last_project": "x"},

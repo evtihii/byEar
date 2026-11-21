@@ -193,8 +193,7 @@ def start(ws, kind, text=""):
          "Видобування почато" + (f". Примітка: {text}" if text else "")}
     _update(ws, state=phase, prev_state=prev, error=None, message=msg, step_started=agents._now(), now="")
 
-    sett = os.path.join(agents.DATA, "agent_settings.json")
-    agents._write_json(sett, {"disableAllHooks": True})
+    sett, _ = agents.write_claude_settings(settings)
     cmd = [agents.CLAUDE, "-p", "--model", settings.get("setup_model") or "claude-opus-5-5",
            "--output-format", "stream-json", "--verbose", "--permission-mode", "acceptEdits",
            "--tools", TOOLS, "--allowedTools", TOOLS, "--settings", sett, "--strict-mcp-config", "--no-chrome",
