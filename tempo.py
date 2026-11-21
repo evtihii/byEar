@@ -35,7 +35,7 @@ def _atempo(speed):
 
 def duration(ffprobe, path):
     r = subprocess.run([ffprobe, "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", path],
-                       capture_output=True, text=True)
+                       capture_output=True, text=True, encoding="utf-8", errors="replace")
     return float(r.stdout.strip())
 
 
@@ -79,7 +79,7 @@ def stretch(ffmpeg, src, dst, speed, start=None, end=None, total=None, codec_arg
             chains[-1] = chains[-1].replace("[b]", "[out]")
         cmd = [ffmpeg, "-v", "error", "-y", "-i", src, "-filter_complex", ";".join(chains), "-map", "[out]",
                "-map_metadata", "0", *codec_args, dst]
-    r = subprocess.run(cmd, capture_output=True, text=True)
+    r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
     if r.returncode != 0:
         raise RuntimeError("ffmpeg: " + r.stderr.strip()[-300:])
 

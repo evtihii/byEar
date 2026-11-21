@@ -11,24 +11,18 @@ import shutil
 import subprocess
 import tempfile
 
+import platform_util
+
 HERE = os.path.dirname(os.path.abspath(__file__))
-CLI_DIRS = ["/opt/homebrew/bin", "/usr/local/bin"]
 MODEL_DIRS = [os.path.expanduser("~/.cache/whisper"), os.path.join(HERE, "models"),
-              "/opt/homebrew/share/whisper-cpp/models", "/usr/local/share/whisper-cpp/models"]
+              *platform_util.whisper_model_dirs()]           # Homebrew on macOS, winget/manual on Windows
 # best first; quantised variants (…-q5_0) are accepted too
 PREFER = ["large-v3-turbo", "large-v3", "large-v2", "large", "medium", "small", "base", "tiny"]
 MAX_SECONDS = 120
 
 
 def find_cli():
-    p = shutil.which("whisper-cli")
-    if p:
-        return p
-    for d in CLI_DIRS:
-        f = os.path.join(d, "whisper-cli")
-        if os.access(f, os.X_OK):
-            return f
-    return None
+    return platform_util.which("whisper-cli")       # PATH, then Homebrew / winget / scoop folders
 
 
 def find_model(settings, lang="uk"):
@@ -80,7 +74,7 @@ def transcribe(ffmpeg, data, ext, settings):
         with open(src, "wb") as f:
             f.write(data)
         r = subprocess.run([ffmpeg, "-v", "error", "-y", "-i", src, "-t", str(MAX_SECONDS), "-ac", "1", "-ar", "16000",
-                            "-c:a", "pcm_s16le", wav], capture_output=True, text=True)
+                            "-c:a", "pcm_s16le", wav], capture_output=True, text=True, encoding="utf-8", errors="replace")
         if r.returncode != 0 or not os.path.isfile(wav):
             raise RuntimeError("Не вдалося прочитати запис: " + r.stderr.strip()[-200:])
         cmd = [st["cli"], "-m", st["model"], "-l", st["lang"], "-f", wav, "-nt", "-np",
@@ -88,7 +82,7 @@ def transcribe(ffmpeg, data, ext, settings):
         prompt = (settings or {}).get("dictation_prompt") or ""
         if prompt:
             cmd += ["--prompt", prompt]
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+        r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=180)
         if r.returncode != 0:
             raise RuntimeError("Whisper: " + (r.stderr.strip()[-300:] or "помилка"))
         text = " ".join(line.strip() for line in r.stdout.splitlines() if line.strip())

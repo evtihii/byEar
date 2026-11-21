@@ -64,6 +64,10 @@ class Server:
                 json.dump(settings, f)
         fake = os.path.join(HERE, "fake_agent.py")
         os.chmod(fake, 0o755)
+        if os.name == "nt":                          # Windows cannot run a .py directly: wrap it in a .cmd
+            fake = os.path.join(self.tmp, "fake_claude.cmd")
+            with open(fake, "w") as f:
+                f.write(f'@"{sys.executable}" "{os.path.join(HERE, "fake_agent.py")}" %*\n')
         self.port = free_port()
         env = dict(os.environ, SLUHACH_PROJECTS=self.projects, SLUHACH_DATA=self.data,
                    SLUHACH_CLAUDE=fake, PORT=str(self.port), FAKE_MODE=fake_mode,

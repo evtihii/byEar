@@ -20,6 +20,7 @@ import webbrowser
 
 import agents
 import dictation
+import platform_util
 import setup_agent
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, unquote, urlparse
@@ -248,7 +249,7 @@ def scan(root):
     root = os.path.abspath(root)
     for d, dirs, files in os.walk(root):
         dirs[:] = sorted((x for x in dirs if not x.startswith(".")), key=nat_key)
-        rel = os.path.relpath(d, root)
+        rel = os.path.relpath(d, root).replace(os.sep, "/")   # "/" в id і шляхах і на Windows
         rel = "" if rel == "." else rel
         files = sorted(
             (f for f in files if not f.startswith(".") and f != FEEDBACK_NAME and f not in OLD_FEEDBACK_NAMES and ".tmp" not in f),
@@ -273,7 +274,7 @@ def scan(root):
         def mk(item_id, name, label, flist, tlist):
             flist = sorted(flist, key=lambda x: (tag_rank(x["tag"]), nat_key(x["name"])))
             for x in flist:
-                x["path"] = os.path.join(rel, x["name"]) if rel else x["name"]
+                x["path"] = f"{rel}/{x['name']}" if rel else x["name"]
                 try:
                     x["mtime"] = round(os.path.getmtime(os.path.join(d, x["name"])), 2)
                 except OSError:
@@ -442,7 +443,8 @@ class Handler(BaseHTTPRequestHandler):
             elif path == "/api/config":
                 # мітки й мови — одне джерело для сервера й сторінки
                 self.send_json({"source_tags": SOURCE_TAGS, "target_tags": TARGET_TAGS,
-                                "lang_alias": LANG_ALIAS, "lang_names": LANG_NAMES})
+                                "lang_alias": LANG_ALIAS, "lang_names": LANG_NAMES,
+                                "reveal_label": platform_util.REVEAL_LABEL})
             elif path == "/api/usage":
                 # кредити сервісу генерації проєкту (кеш 2 хв; fresh=1 — оновити)
                 p = find_project(q.get("p", ""))
@@ -734,7 +736,7 @@ class Handler(BaseHTTPRequestHandler):
                 elif path == "/api/setup/stop":
                     self.send_json({"ok": setup_agent.stop(ws)})
                 elif path == "/api/setup/reveal":
-                    subprocess.run(["open", ws])             # робоча тека у Finder
+                    platform_util.open_folder(ws)            # робоча тека у Finder / Explorer
                     self.send_json({"ok": True})
                 else:
                     extra, err = setup_agent.finish(ws)
@@ -798,21 +800,17 @@ class Handler(BaseHTTPRequestHandler):
                     save_projects(projects)
                 self.send_json({"ok": True})
             elif path == "/api/pick-folder":
-                script = ('tell application "System Events" to activate\n'
-                          'tell application "System Events" to return POSIX path of '
-                          '(choose folder with prompt "' + str(data.get("prompt") or "Виберіть папку проєкту").replace('"', "'").replace("\\", "/")[:80] + '")')
-                r = subprocess.run(["osascript", "-e", script], capture_output=True, text=True)
-                folder = r.stdout.strip().rstrip("/")
-                self.send_json({"path": folder} if r.returncode == 0 and folder else {"path": None})
+                folder = platform_util.pick_folder(str(data.get("prompt") or "Виберіть папку проєкту"))
+                self.send_json({"path": folder})
             elif path == "/api/reveal":
                 p = find_project(q.get("p", ""))
                 full = safe_join(p["path"], str(data.get("f") or "")) if p else None
                 if not full or not os.path.exists(full):
                     return self.error("Не знайдено", 404)
                 if data.get("open") and os.path.isdir(full):
-                    subprocess.run(["open", full])           # відкрити теку у Finder
+                    platform_util.open_folder(full)          # відкрити теку у Finder / Explorer
                 else:
-                    subprocess.run(["open", "-R", full])     # показати у Finder (виділити)
+                    platform_util.reveal(full)               # показати у Finder / Explorer (виділити)
                 self.send_json({"ok": True})
             else:
                 self.error("Немає такої дії", 404)
@@ -821,6 +819,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
+    platform_util.utf8_console()
     url = f"http://localhost:{PORT}"
     try:
         httpd = ThreadingHTTPServer((HOST, PORT), Handler)
@@ -838,13 +837,11 @@ def main():
     print("Щоб зупинити — закрийте це вікно або натисніть Ctrl+C.")
     if "--no-open" not in sys.argv:
         threading.Timer(0.6, lambda: webbrowser.open(url)).start()
-    import signal                                    # додаток Holosii.app зупиняє сервер через SIGTERM
-
-    def _term(*_):
-        raise KeyboardInterrupt
-    signal.signal(signal.SIGTERM, _term)
+    # Holosii.app зупиняє сервер через SIGTERM, Holosii.exe — закриваючи stdin (--stdin-stop)
+    platform_util.on_terminate(lambda: threading.Thread(target=httpd.shutdown, daemon=True).start())
     try:
         httpd.serve_forever()
+        print("\nЗупинено.")
     except KeyboardInterrupt:
         print("\nЗупинено.")
     finally:

@@ -49,10 +49,15 @@ Claude chat. Holosii should do both ends itself.
 - [x] **Holosii.app for macOS** (2026-11-19): a Swift shell around WKWebView (`mac/main.swift`, build with
   `zsh mac/build.sh`). Starts `server.py --no-open` itself, ⌘Q stops the server and the agent; if a server
   is already running it only attaches and leaves it alone.
-- [ ] **Windows** (not now). Plan: the same thin shell in C# + WebView2. Before that, move the three
-  macOS-specific spots in the server into a separate module — folder picker (`osascript`), Trash (`~/.Trash`),
-  “Reveal in Finder” (`open -R`) — and add Windows versions (Recycle Bin, Explorer). Ship Python and ffmpeg
-  alongside or inside the installer. Build on a Windows machine or in CI.
+- [x] **Windows** (2026-11-21, branch `feat/windows`). macOS-specific spots moved to `platform_util.py`
+  (folder picker, Trash, Finder/Explorer, tool folders, process groups, how the shell stops the server) with
+  Windows versions (PowerShell folder dialog, `%LOCALAPPDATA%\Holosii\Trash` → Recycle Bin, `explorer /select,`,
+  winget/scoop paths, `taskkill /T`, stdin EOF). Thin C# + WebView2 shell in `win/` (`build.ps1`), CI on
+  windows-latest builds it and runs the tests. Paths in the API always use `/`.
+  - [ ] Check on a real Windows machine: the window, microphone + dictation, folder dialog, Explorer, Recycle
+    Bin sweep, the fix agent with Claude Code for Windows (Git Bash), project setup step stop.
+  - [ ] Installer that ships Python and ffmpeg (now they are installed separately).
+  - [ ] Recipes and `BRIEF.md` files assume macOS tools in places (`python3`, CrossOver paths) — review for Windows.
 - [ ] English UI (the interface is Ukrainian for now).
 
 ## Quality and safety (found 2026-11-19)

@@ -48,11 +48,14 @@ let SOURCE = ["en","eng","orig","original","src","ref","ja","jp","jpn","old"];
 let TARGET = ["ua","uk","ukr","new"];
 let LANG_ALIAS = { eng: "en", jp: "ja", jpn: "ja", uk: "ua", ukr: "ua" };
 let LANG_NAME = { en: "англійська", ja: "японська", ua: "українська" };
+let REVEAL = "Показати у Finder";               /* на Windows сервер дає «Показати у Провіднику» */
 async function loadConfig() {
   try {
     const c = await api("/api/config");
     SOURCE = c.source_tags || SOURCE; TARGET = c.target_tags || TARGET;
     LANG_ALIAS = c.lang_alias || LANG_ALIAS; LANG_NAME = c.lang_names || LANG_NAME;
+    REVEAL = c.reveal_label || REVEAL;
+    const rb = document.getElementById("revealBtn"); if (rb) rb.title = REVEAL;
   } catch {}
 }
 function langName(code) { const pr = S.projects.find((x) => x.id === S.pid) || {}; return ({ ...LANG_NAME, ...(pr.lang_names || {}) })[code]; }

@@ -11,12 +11,12 @@ the user can also write to it between steps.
 import json
 import os
 import re
-import signal
 import subprocess
 import threading
 import time
 
 import agents
+import platform_util
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 RECIPES = os.path.join(HERE, "recipes")
@@ -203,7 +203,8 @@ def start(ws, kind, text=""):
         cmd += ["--resume", st["session_id"]]
     os.makedirs(os.path.join(_dir(ws), "tmp"), exist_ok=True)
     proc = subprocess.Popen(cmd, cwd=ws, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                            stderr=subprocess.STDOUT, text=True, bufsize=1, start_new_session=True)
+                            stderr=subprocess.STDOUT, text=True, bufsize=1, **platform_util.ENC,
+                            **platform_util.new_group_kwargs())
     proc.stdin.write(_prompt(kind, ws, st, text))
     proc.stdin.close()
     with _lock:
@@ -217,10 +218,7 @@ def stop(ws):
         proc = _runs.get(ws)
     if not proc:
         return False
-    try:
-        os.killpg(proc.pid, signal.SIGTERM)          # the agent and whatever it started (extract scripts)
-    except OSError:
-        proc.terminate()
+    platform_util.kill_tree(proc)                    # the agent and whatever it started (extract scripts)
     _update(ws, stop_requested=True)
     return True
 
@@ -234,7 +232,7 @@ def _follow(ws, proc, kind, prev, settings):
     err = None
     log = open(os.path.join(_dir(ws), "setup.log"), "a", encoding="utf-8")
     log.write(f"\n=== {agents._now()} {kind}\n")
-    killer = threading.Timer(timeout, lambda: os.killpg(proc.pid, signal.SIGTERM))
+    killer = threading.Timer(timeout, lambda: platform_util.kill_tree(proc))
     killer.daemon = True
     killer.start()
     try:
@@ -267,7 +265,7 @@ def _follow(ws, proc, kind, prev, settings):
                 log.flush()
                 if limit and tokens > limit:
                     err = f"Перевищено ліміт токенів на крок ({limit:,})".replace(",", " ")
-                    os.killpg(proc.pid, signal.SIGTERM)
+                    platform_util.kill_tree(proc)
             elif t == "result":
                 cost = float(ev.get("total_cost_usd") or 0)
                 if ev.get("is_error") and not err:

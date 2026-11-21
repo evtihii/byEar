@@ -18,6 +18,7 @@ import time
 import uuid
 
 import analysis
+import platform_util
 import tempo
 import echo
 
@@ -26,11 +27,11 @@ DATA = os.environ.get("SLUHACH_DATA") or HERE
 QUEUE_FILE = os.path.join(DATA, "queue.json")
 SETTINGS_FILE = os.path.join(DATA, "settings.json")
 LOGS_DIR = os.path.join(DATA, "logs")
-VOLUME_TRASH = os.path.expanduser("~/.Trash/Holosii_volume")
+VOLUME_TRASH = platform_util.trash_dir("Holosii_volume")
 HISTORY_DIR = os.path.join(DATA, "history")      # версії файлів для «Скасувати» (⌘Z) і «Повторити» (⌘⇧Z)
 HISTORY_MAX = 30
 BEFORE_DIR = os.path.join(DATA, "before")        # версія файлу до правки агента (для «до / після»)
-OLD_LOGS_TRASH = os.path.expanduser("~/.Trash/Holosii_old_logs")
+OLD_LOGS_TRASH = platform_util.trash_dir("Holosii_old_logs")
 KEEP_LOGS = 300                                  # журналів правок лишати
 KEEP_BEFORE = 150                                # копій «до правки» лишати
 AGENT_LOG_MAX = 5 * 1024 * 1024
@@ -87,20 +88,11 @@ def load_settings():
     return s
 
 
-def which(name, extra=()):
-    p = shutil.which(name)
-    if p:
-        return p
-    for d in extra:
-        c = os.path.join(os.path.expanduser(d), name)
-        if os.path.exists(c):
-            return c
-    return None
+which = platform_util.which                      # PATH + Homebrew / winget / scoop / npm folders
 
-
-CLAUDE = os.environ.get("SLUHACH_CLAUDE") or which("claude", ["~/.local/bin", "/opt/homebrew/bin", "/usr/local/bin"])
-FFMPEG = which("ffmpeg", ["/opt/homebrew/bin", "/usr/local/bin"])
-FFPROBE = which("ffprobe", ["/opt/homebrew/bin", "/usr/local/bin"])
+CLAUDE = os.environ.get("SLUHACH_CLAUDE") or which("claude")
+FFMPEG = which("ffmpeg")
+FFPROBE = which("ffprobe")
 
 
 # ---------- черга ----------
@@ -256,7 +248,8 @@ class Agent:
         for d in sorted(dirs):
             cmd += ["--add-dir", d]
         self.proc = subprocess.Popen(cmd, cwd=cwd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                     stderr=subprocess.STDOUT, text=True, bufsize=1)
+                                     stderr=subprocess.STDOUT, text=True, bufsize=1, **platform_util.ENC,
+                                     **platform_util.no_window_kwargs())
         self.events = queue.Queue()
         proc, evq = self.proc, self.events
 
@@ -460,7 +453,7 @@ def _prompt(job, project, first):
         f"Коментар користувача: «{job['comment']}»\n\n"
         + ref +
         f"Зроби правку за пам'яткою. Результат — один файл поверх {os.path.join(root, tf['path']) if tf else '(файл UA)'} "
-        "(стару версію спершу збережи в Кошик). Онови опис у текстовому файлі фрази. Нічого не вбудовуй у гру.\n"
+        f"(стару версію спершу збережи в Кошик{platform_util.agent_trash_hint()}). Онови опис у текстовому файлі фрази. Нічого не вбудовуй у гру.\n"
         "Наприкінці відповідай 1–3 реченнями українською: що зроблено і на що звернути увагу при прослуховуванні."
     )
 
@@ -581,7 +574,7 @@ def project_usage(project, fresh=False):
     if c and not fresh and time.time() - c["_t"] < USAGE_TTL:
         return {k: v for k, v in c.items() if k != "_t"}
     try:
-        r = subprocess.run([str(x) for x in cmd], capture_output=True, text=True, timeout=20,
+        r = subprocess.run([str(x) for x in cmd], capture_output=True, text=True, **platform_util.ENC, timeout=20,
                            cwd=project.get("agent_cwd") or None)
         d = json.loads(r.stdout.strip().splitlines()[-1])
         if not isinstance(d.get("used"), (int, float)):
@@ -655,7 +648,7 @@ def refresh_limits(wait=False):
             p = subprocess.run([CLAUDE, "-p", "--model", "haiku", "--output-format", "stream-json", "--verbose",
                                 "--tools", "", "--strict-mcp-config", "--no-chrome", "--no-session-persistence",
                                 "--settings", os.path.join(DATA, "agent_settings.json")],
-                               cwd=cwd, input="Reply with: ok", capture_output=True, text=True, timeout=90)
+                               cwd=cwd, input="Reply with: ok", capture_output=True, text=True, **platform_util.ENC, timeout=90)
             for line in p.stdout.splitlines():
                 try:
                     ev = json.loads(line)
@@ -750,6 +743,7 @@ def _rotate(folder, keep, skip=()):
 
 
 def rotate_logs():
+    threading.Thread(target=platform_util.sweep_trash, daemon=True).start()   # Windows: old trash → Recycle Bin
     _rotate(LOGS_DIR, KEEP_LOGS, skip=("agent.log", "app_server.log"))
     _rotate(BEFORE_DIR, KEEP_BEFORE)
     for name in ("agent.log",):                      # app_server.log Holosii.app перестворює сам
@@ -789,7 +783,7 @@ def _codec_args(full):
         c = "pcm_s16le"
         if FFPROBE:
             r = subprocess.run([FFPROBE, "-v", "quiet", "-select_streams", "a:0", "-show_entries",
-                                "stream=codec_name", "-of", "csv=p=0", full], capture_output=True, text=True)
+                                "stream=codec_name", "-of", "csv=p=0", full], capture_output=True, text=True, **platform_util.ENC)
             c = r.stdout.strip() or c
         return ["-c:a", c]
     if ext == ".mp3":
@@ -879,7 +873,7 @@ def _measure(full, start=None, end=None):
     if start is not None:
         cut = ["-ss", f"{start:.3f}", "-t", f"{max(0.01, end - start):.3f}"]
     r = subprocess.run([FFMPEG, "-hide_banner", "-nostats", *cut, "-i", full, "-af", "ebur128,astats=metadata=0",
-                        "-f", "null", "-"], capture_output=True, text=True)
+                        "-f", "null", "-"], capture_output=True, text=True, **platform_util.ENC)
     txt = r.stderr
     lufs = None
     m = re.findall(r"I:\s+(-?[\d.]+|-inf) LUFS", txt)
@@ -895,7 +889,7 @@ def _measure(full, start=None, end=None):
 
 def _duration(full):
     r = subprocess.run([FFPROBE, "-v", "quiet", "-show_entries", "format=duration", "-of", "csv=p=0", full],
-                       capture_output=True, text=True)
+                       capture_output=True, text=True, **platform_util.ENC)
     try:
         return float(r.stdout.strip())
     except ValueError:
@@ -1029,7 +1023,7 @@ def audio_edit(full, rel, op, db=0.0, start=None, end=None, ref=None):
     ext = os.path.splitext(full)[1].lower()
     tmp = full + ".tmp" + ext
     r = subprocess.run([FFMPEG, "-v", "error", "-y", "-i", full, "-af", af, "-map_metadata", "0",
-                        *_codec_args(full), tmp], capture_output=True, text=True)
+                        *_codec_args(full), tmp], capture_output=True, text=True, **platform_util.ENC)
     if r.returncode != 0:
         try:
             os.remove(tmp)

@@ -97,7 +97,7 @@ async function renderSetup(keepInput) {
     <h1>${esc(p.name)} <small>налаштування проєкту</small></h1>
     <div class="spaths">
       <div><span>Гра</span><code>${esc(p.game_dir)}</code></div>
-      <div><span>Робоча тека</span><code class="link" id="setupWs" title="Показати у Finder">${esc(p.workspace)}</code></div>
+      <div><span>Робоча тека</span><code class="link" id="setupWs" title="${esc(REVEAL)}">${esc(p.workspace)}</code></div>
     </div>
     <div class="ssteps">${steps}</div>
     <div class="sstate ${st.state}">${busy ? '<span class="spin"></span>' : ""}<b>${esc(SETUP_STATE[st.state] || st.state)}</b>${st.now && busy ? `<span class="snow">${esc(st.now)}</span>` : ""}${st.error ? `<span class="serr">${esc(st.error)}</span>` : ""}<span class="grow"></span><span class="scost">${st.tokens_total ? Math.round(st.tokens_total / 1000) + " тис. токенів" : ""}${cost}</span></div>

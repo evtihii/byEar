@@ -1,0 +1,52 @@
+name: Windows
+
+on:
+  push:
+    branches: [main, "feat/**", "fix/**"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Install ffmpeg
+        run: choco install ffmpeg -y --no-progress
+
+      - name: Build Holosii.exe
+        shell: pwsh
+        run: ./win/build.ps1
+
+      - name: Python tests
+        shell: pwsh
+        run: |
+          $env:Path = "C:\ProgramData\chocolatey\bin;" + $env:Path
+          ffmpeg -version | Select-Object -First 1
+          python -m unittest discover -s tests -v
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Holosii-windows
+          path: Holosii.exe
+
+  test-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install ffmpeg
+        run: brew install ffmpeg
+      - name: Python tests
+        run: python -m unittest discover -s tests -v

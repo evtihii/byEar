@@ -20,11 +20,35 @@ per-project brief, and Holosii shows you the result for the next listen.
 
 - **macOS app:** `zsh mac/build.sh` builds `Holosii.app` next to `server.py`. The app starts the server
   itself and stops it (together with the agent) on ⌘Q. If a server is already running, it just attaches.
-- **Without the app:** `python3 server.py` (or `Holosii.command`), then open http://localhost:8765.
+- **Windows app:** `powershell -ExecutionPolicy Bypass -File win\build.ps1` builds `Holosii.exe` next to
+  `server.py` (see [Windows](#windows) below).
+- **Without the app:** `python3 server.py` (or `Holosii.command`; on Windows `Holosii.bat`), then open
+  http://localhost:8765.
 
 Requirements: Python 3.10+, `ffmpeg` / `ffprobe`; for the fix queue — [Claude Code](https://claude.com/claude-code) (`claude`).
 
 The interface is in Ukrainian for now.
+
+### Windows
+
+The Windows version is the same server with a thin C# + WebView2 window (`win/`), like `mac/` for macOS.
+
+- **Install:** Python 3.10+ from python.org (with the `py` launcher), `ffmpeg` (`winget install Gyan.FFmpeg`),
+  [Claude Code](https://claude.com/claude-code) for the fix queue. The WebView2 Runtime is part of Windows 11
+  (Windows 10: install it from Microsoft).
+- **Build:** .NET 8 SDK (`winget install Microsoft.DotNet.SDK.8`), then
+  `powershell -ExecutionPolicy Bypass -File win\build.ps1` → `Holosii.exe` next to `server.py`. It needs the
+  .NET 8 Desktop Runtime; `-SelfContained` bundles the runtime into the exe instead. CI builds it too
+  (`.github/workflows/windows.yml`, artifact `Holosii-windows`).
+- **What the app does:** starts `py -3 -X utf8 server.py --no-open --stdin-stop` (or attaches to a running
+  server), shows http://localhost:&lt;port&gt;, allows the microphone for localhost only, opens other links in
+  the default browser, and stops the server with the agent when the window closes (it closes the server's
+  stdin; a Job Object makes sure nothing is left running even if the app crashes). Server log:
+  `logs\app_server.log`. `HOLOSII_PYTHON` / `HOLOSII_SERVER_DIR` override the Python and the server folder.
+- **Differences from macOS** (all in `platform_util.py`): “Показати у Провіднику” instead of Finder; the
+  folder dialog is the Windows one; old versions and rotated logs go to `%LOCALAPPDATA%\Holosii\Trash\`
+  instead of `~/.Trash/`, and entries older than 7 days are moved from there to the Recycle Bin; tools are
+  looked up on `PATH` and in the winget / scoop / Chocolatey / npm folders instead of Homebrew.
 
 ## Projects
 
@@ -75,7 +99,8 @@ The “Диктувати” button next to the comment (or the D key) records y
 (whisper.cpp `whisper-cli` + a multilingual ggml model in `~/.cache/whisper/`) turns it into text at the cursor.
 Nothing leaves the machine. Without Whisper the button is disabled; hovering it explains why and links to the
 install guide at `/docs/whisper.html` (`static/docs/`). Settings: `dictation_lang` (default `uk`),
-`whisper_model`, `dictation_prompt` (names Whisper should spell right).
+`whisper_model`, `dictation_prompt` (names Whisper should spell right). On Windows put `whisper-cli.exe` on
+`PATH` (or in `%LOCALAPPDATA%\Programs\whisper-cpp\`); models are looked up in `~/.cache/whisper/` as well.
 
 ## Echo
 
@@ -111,4 +136,5 @@ origins and non-JSON POSTs, so a web page open in your browser cannot queue jobs
 ## Tests
 
 `python3 -m unittest discover -s tests` — starts real servers on free ports with a temporary project and a
-fake agent (`tests/fake_agent.py`). Requires ffmpeg.
+fake agent (`tests/fake_agent.py`). Requires ffmpeg. `tests/test_platform.py` covers `platform_util.py`.
+GitHub Actions runs the tests on Windows and macOS and builds `Holosii.exe` (`.github/workflows/windows.yml`).
