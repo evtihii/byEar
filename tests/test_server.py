@@ -233,6 +233,13 @@ class AgentJobs(unittest.TestCase):
         st, r = self.s.post("/api/limits/refresh", {})
         self.assertEqual(st, 200)
 
+    def test_queued_line_is_marked_fix(self):
+        st, r = self.s.post("/api/queue/add?p=" + self.s.pid, {"item": "grp/02_b", "comment": "з оркестратора"})
+        self.assertEqual(st, 200)
+        st, d = self.s.get("/api/project?p=" + self.s.pid)
+        self.assertEqual(d["feedback"]["grp/02_b"]["status"], "fix")
+        self.s.wait_job(r["job"]["id"])
+
     def test_default_and_no_reference(self):
         st, r = self.s.post("/api/queue/add?p=" + self.s.pid, {"item": "grp/02_b", "comment": "x"})
         self.assertEqual(r["job"]["ref"], "en")

@@ -634,7 +634,17 @@ class Handler(BaseHTTPRequestHandler):
                 want = data.get("ref")
                 want = str(want).lower() if want else None
                 lang, rf = resolve_ref(p, item, want)
-                self.send_json({"ok": True, "job": agents.add_job(p, item, comment, lang, rf and rf["path"])})
+                job = agents.add_job(p, item, comment, lang, rf and rf["path"])
+                with lock:                                   # фраза в черзі завжди позначена «Виправити»
+                    fb = load_feedback(p)
+                    e = fb["items"].get(item["id"]) or {}
+                    if e.get("status") != "fix":
+                        e = {**e, "status": "fix", "heard": True, "heardAt": round(time.time(), 2),
+                             "updated": time.strftime("%Y-%m-%dT%H:%M:%S")}
+                        e.setdefault("comment", comment.splitlines()[0][:200])
+                        fb["items"][item["id"]] = e
+                        write_json(feedback_path(p), fb)
+                self.send_json({"ok": True, "job": job})
             elif path == "/api/queue/cancel":
                 self.send_json({"ok": agents.cancel_job(str(data.get("id")))})
             elif path == "/api/queue/retry":
