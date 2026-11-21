@@ -50,7 +50,7 @@ def make_ir(path, tail, tone=4000.0, seed=7):
 
 
 def _run(cmd):
-    p = subprocess.run(cmd, capture_output=True, text=True)
+    p = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
     if p.returncode != 0:
         raise RuntimeError("ffmpeg: " + p.stderr.strip()[-300:])
 
@@ -59,7 +59,7 @@ def _rms(ffmpeg, f, start=None, end=None):
     """RMS level in dB of the file or of [start, end]."""
     cut = ["-ss", f"{start:.3f}", "-t", f"{max(0.01, end - start):.3f}"] if start is not None else []
     p = subprocess.run([ffmpeg, "-hide_banner", "-nostats", *cut, "-i", f, "-af", "astats=metadata=0",
-                        "-f", "null", "-"], capture_output=True, text=True)
+                        "-f", "null", "-"], capture_output=True, text=True, encoding="utf-8", errors="replace")
     import re
     m = re.findall(r"RMS level dB:\s*(-?[\d.]+|-inf)", p.stderr)
     v = m[-1] if m else "-inf"

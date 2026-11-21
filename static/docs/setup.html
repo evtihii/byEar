@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Проєкт з гри</title>
+<style>
+:root { --bg: #f6f6f7; --card: #fff; --text: #1d1d1f; --text2: #555; --text3: #888; --accent: #0a84ff; --sep: #e2e2e5;
+  --code: #f0f0f3; --ok: #1f9d55; --warn: #c27c0e; }
+@media (prefers-color-scheme: dark) { :root { --bg: #1c1c1e; --card: #2a2a2d; --text: #f2f2f7; --text2: #b0b0b5; --text3: #8a8a8f;
+  --accent: #4aa3ff; --sep: #3a3a3d; --code: #1f1f22; --ok: #4cd07d; --warn: #f0b04a; } }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+main { max-width: 760px; margin: 0 auto; padding: 40px 20px 60px; }
+h1 { font-size: 28px; letter-spacing: -.02em; margin: 0 0 6px; }
+.lead { color: var(--text2); margin: 0 0 28px; }
+h2 { font-size: 18px; margin: 34px 0 10px; }
+.card { background: var(--card); border: 1px solid var(--sep); border-radius: 12px; padding: 16px 18px; margin: 12px 0; }
+.step { display: flex; gap: 14px; }
+.n { flex: none; width: 28px; height: 28px; border-radius: 50%; background: var(--accent); color: #fff; font-weight: 700;
+  display: grid; place-items: center; font-size: 14px; margin-top: 2px; }
+.step h3 { margin: 0 0 6px; font-size: 16px; }
+.step > div:last-child { flex: 1; min-width: 0; }
+pre { background: var(--code); border: 1px solid var(--sep); border-radius: 8px; padding: 10px 12px; overflow-x: auto;
+  font: 13px/1.5 ui-monospace, Menlo, monospace; margin: 8px 0; white-space: pre; }
+code { font: 13px ui-monospace, Menlo, monospace; background: var(--code); padding: 1px 5px; border-radius: 4px; }
+pre code { background: none; padding: 0; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--sep); vertical-align: top; }
+th { color: var(--text3); font-weight: 600; font-size: 12px; }
+.ok { color: var(--ok); font-weight: 600; }
+.note { color: var(--text2); font-size: 14px; }
+.warn { border-left: 3px solid var(--warn); }
+#status { font-weight: 600; }
+a { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <p class="note"><a href="/docs/">← Документація</a></p>
+  <h1>Проєкт з гри</h1>
+  <p class="lead">Голосій може сам дістати озвучку з гри: окремий <b>агент налаштування</b> оглядає теку гри, показує
+    план і зразки, а після твого «так» розкладає всі фрази по теках для прослуховування й пише скрипти, якими потім
+    можна зібрати мод назад. Гру він не змінює.</p>
+
+  <h2>Як почати</h2>
+  <div class="card step"><div class="n">1</div><div>
+    <h3>Новий проєкт → «З гри»</h3>
+    <p>На головній натисни <b>Новий проєкт</b>, вибери <b>З гри</b>, вкажи теку гри й, за бажання, робочу теку.
+      Якщо робочу теку не вказати, Голосій створить <code>~/Holosii/&lt;назва&gt;</code>. Робоча тека не може бути
+      всередині теки гри.</p>
+  </div></div>
+  <div class="card step"><div class="n">2</div><div>
+    <h3>Огляд гри</h3>
+    <p>Натисни <b>Почати огляд гри</b>. Агент визначить рушій і формат звуку, порахує фрази кожною мовою, знайде
+      субтитри й дістане до 10 зразків. Нічого великого він ще не видобуває.</p>
+  </div></div>
+  <div class="card step"><div class="n">3</div><div>
+    <h3>План</h3>
+    <p>Послухай зразки й прочитай план. Якщо щось не так — напиши агенту внизу (⌘↵ — надіслати), він поправить план.
+      Якщо все добре — <b>Так, видобувай</b>. У поле можна дописати примітку, наприклад «лише англійська й японська».</p>
+  </div></div>
+  <div class="card step"><div class="n">4</div><div>
+    <h3>Видобування й готово</h3>
+    <p>Агент заповнить <code>listen/</code> (тека на кожну фразу: <code>en.wav</code>, <code>ja.wav</code>…,
+      <code>текст.txt</code>), напише <code>tools/extract.py</code>, <code>tools/pack.py</code> і пам'ятку
+      <code>BRIEF.md</code> для агента правок. Натисни <b>Відкрити проєкт для прослуховування</b> — і працюй як звичайно.</p>
+  </div></div>
+
+  <h2>Повернутись до проєктів</h2>
+  <div class="card"><p>Кнопка <b>← Проєкти</b> є і у вікні налаштування, і над списком фраз. Вона веде на головну: там
+    усі проєкти й <b>Новий проєкт</b>. Налаштування можна покинути на будь-якому кроці — агент працює далі, а
+    проєкт у списку показує ⚙, доки налаштування не завершено.</p></div>
+
+  <h2>Межі</h2>
+  <div class="card warn">
+    <p>Лише твоя копія гри й мод для себе. Агент не шукає ключів шифрування й не обходить захисту: якщо архіви
+      зашифровані, він так і скаже, і крок «Видобувай» стане недоступним.</p>
+    <p>Тека гри — лише для читання. <code>pack.py</code> збирає мод у <code>build/</code> робочої теки; встановлення в
+      гру — окремий крок.</p>
+  </div>
+
+  <h2>Що знає агент</h2>
+  <p>Рецепти в теці <code>recipes/</code>: як влаштований звук у певному типі ігор. Перший — Unreal Engine + Wwise
+    (перевірено на SILENT HILL f). Якщо рецепт не підійшов, агент розбирається сам і в кінці пише чернетку нового
+    рецепта в <code>.holosii/recipe_draft.md</code>.</p>
+
+  <h2>Налаштування</h2>
+  <table>
+    <tr><th>Поле в <code>settings.json</code></th><th>Що робить</th></tr>
+    <tr><td><code>setup_model</code></td><td>Модель агента налаштування, за замовчуванням <code>claude-opus-5-5</code>.</td></tr>
+    <tr><td><code>setup_max_tokens</code></td><td>Ліміт токенів на один крок (5 000 000; 0 — без ліміту).</td></tr>
+    <tr><td><code>setup_timeout_min</code></td><td>Максимум хвилин на один крок (180).</td></tr>
+  </table>
+</main>
+</body>
+</html>

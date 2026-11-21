@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>наСлух</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23ff2d55'/%3E%3Cpath d='M20 38v-6a12 12 0 0 1 24 0v6' fill='none' stroke='white' stroke-width='5' stroke-linecap='round'/%3E%3Crect x='15' y='36' width='9' height='14' rx='4' fill='white'/%3E%3Crect x='40' y='36' width='9' height='14' rx='4' fill='white'/%3E%3C/svg%3E">
+<title>Голосій</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 120' color='%23111'%3E%3Crect width='120' height='120' rx='28' fill='white' stroke='%23ccc' stroke-width='2'/%3E%3Cpath d='M29 40Q37 28 45 40M75 40Q83 28 91 40' fill='none' stroke='currentColor' stroke-width='6' stroke-linecap='round'/%3E%3Cpath d='M30 58H90Q90 94 60 94Q30 94 30 58Z' fill='currentColor'/%3E%3Cg fill='%23fff'%3E%3Crect x='41' y='66' width='5' height='10' rx='2.5'/%3E%3Crect x='50' y='62' width='5' height='20' rx='2.5'/%3E%3Crect x='59' y='64' width='5' height='16' rx='2.5'/%3E%3Crect x='68' y='62' width='5' height='20' rx='2.5'/%3E%3Crect x='77' y='66' width='5' height='10' rx='2.5'/%3E%3C/g%3E%3C/svg%3E">
 <link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
@@ -23,7 +23,7 @@
     <button id="restartBtn" title="Почати з новим агентом (контекст обнулиться)"><span id="restartIcon"></span>Новий</button>
   </nav>
   <aside class="sidebar">
-    <div class="side-head" id="sideHead" title="Головна" style="cursor:default"><span class="app-icon" id="appIcon"></span><span class="app-name">наСлух<small>ByEar</small></span></div>
+    <div class="side-head" id="sideHead" title="Головна" style="cursor:default"><span class="app-icon" id="appIcon"></span><span class="app-name">Голосій<small>Holosii</small></span></div>
     <div class="side-scroll">
       <div class="side-title">Робота</div>
       <div class="side-row" id="homeRow"><span class="chev none"></span><span class="ic" id="homeIcon"></span><span class="nm">Головна</span></div>
@@ -47,6 +47,7 @@
   <section class="list">
     <div class="toolbar">
       <button class="back-btn" id="backBtn" hidden title="Повернутись туди, звідки прийшов (Esc)"><span id="backIcon"></span>Назад</button>
+      <button class="back-btn" id="projBtn" title="До списку проєктів: відкрити інший або створити новий"><span id="projIcon"></span>Проєкти</button>
       <label class="search"><span id="searchIcon"></span><input id="q" type="search" placeholder="Пошук у назвах і тексті" autocomplete="off" spellcheck="false"></label>
     </div>
     <div class="filters"><div class="seg" id="filters"></div></div>
@@ -67,10 +68,14 @@
 <div class="sheet-back" id="sheetBack">
   <div class="sheet" role="dialog" aria-modal="true">
     <h3>Новий проєкт</h3>
-    <p>Виберіть папку гри зі звуком. Позначки й коментарі збережуться в «summary.json» у цій папці (один файл на гру).</p>
+    <div class="seg pmode" id="pMode"><button data-mode="game" class="on">З гри</button><button data-mode="folder">Тека зі звуками</button></div>
+    <p id="pHint"></p>
     <div class="field"><label for="pName">Назва</label><input id="pName" placeholder="Наприклад, Resident Evil"></div>
-    <div class="field"><label for="pPath">Папка</label>
+    <div class="field"><label for="pPath" id="pPathLbl">Тека гри</label>
       <div class="path-row"><input id="pPath" placeholder="/Users/…/папка" spellcheck="false"><button class="btn" id="pickBtn">Вибрати…</button></div>
+    </div>
+    <div class="field" id="pWsField"><label for="pWs">Робоча тека</label>
+      <div class="path-row"><input id="pWs" placeholder="~/Holosii/назва" spellcheck="false"><button class="btn" id="pickWsBtn">Вибрати…</button></div>
     </div>
     <div class="err" id="pErr"></div>
     <div class="actions"><button class="btn" id="cancelBtn">Скасувати</button><button class="btn primary" id="okBtn">Додати</button></div>
@@ -84,6 +89,7 @@
 <script src="/static/js/keys.js"></script>
 <script src="/static/js/queue.js"></script>
 <script src="/static/js/home.js"></script>
+<script src="/static/js/setup.js"></script>
 <script src="/static/js/boot.js"></script>
 <script src="/static/js/menu.js"></script>
 </body>

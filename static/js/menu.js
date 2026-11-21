@@ -1,4 +1,4 @@
-/* ByEar (наСлух) — контекстне меню по правому кліку: «Показати у Finder», «Відкрити теку».
+/* Holosii (Голосій) — контекстне меню по правому кліку: «Показати у Finder», «Відкрити теку».
    Звичайний (не модульний) скрипт: файли static/js/* вантажаться по черзі й ділять глобальну область. */
 /* ---------- диктування: запис голосу в сторінці → локальний Whisper на сервері → текст у коментар ---------- */
 S.dict = null;                                        // {available, reason, model_name, lang}
@@ -27,7 +27,7 @@ async function startDictation() {
   if (!S.dict || !S.dict.available) { toast("Диктування недоступне: " + ((S.dict && S.dict.reason) || "немає Whisper")); return; }
   let stream;
   try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
-  catch { toast("Немає доступу до мікрофона. Дозволь його для наСлуху: Системні параметри → Приватність і безпека → Мікрофон"); return; }
+  catch { toast("Немає доступу до мікрофона. Дозволь його для Голосія: Системні параметри → Приватність і безпека → Мікрофон"); return; }
   const type = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"].find((t) => window.MediaRecorder && MediaRecorder.isTypeSupported(t)) || "";
   const recorder = new MediaRecorder(stream, type ? { mimeType: type } : undefined);
   const chunks = [];
@@ -72,24 +72,24 @@ function ctxFor(t) {
   const pl = t.closest(".player");
   if (pl) {
     const p = players.find((x) => x.el === pl); if (!p) return null;
-    return [p.file.name, [["Показати у Finder", () => reveal(S.pid, p.file.path)]]];
+    return [p.file.name, [[REVEAL, () => reveal(S.pid, p.file.path)]]];
   }
   const row = t.closest(".row[data-id]");
   if (row) {
     const it = S.byId.get(row.dataset.id); if (!it) return null;
     const dir = it.files[0] ? it.files[0].path.split("/").slice(0, -1).join("/") : it.id;
-    return [it.name, [["Показати у Finder", () => reveal(S.pid, it.files.length > 1 ? dir || it.files[0].path : it.files[0].path)],
+    return [it.name, [[REVEAL, () => reveal(S.pid, it.files.length > 1 ? dir || it.files[0].path : it.files[0].path)],
                       ["Відкрити теку фрази", () => reveal(S.pid, dir, true)]]];
   }
   const fr = t.closest("[data-label]");
   if (fr && S.pid) {
     const l = fr.dataset.label;
-    return [l ? l.split("/").pop() : "Усі фрази", [["Показати у Finder", () => reveal(S.pid, l)], ["Відкрити теку", () => reveal(S.pid, l, true)]]];
+    return [l ? l.split("/").pop() : "Усі фрази", [[REVEAL, () => reveal(S.pid, l)], ["Відкрити теку", () => reveal(S.pid, l, true)]]];
   }
   const pr = t.closest("[data-pid]");
   if (pr) {
     const p = S.projects.find((x) => x.id === pr.dataset.pid); if (!p || !p.exists) return null;
-    return [p.name, [["Показати у Finder", () => reveal(p.id, "")], ["Відкрити теку проєкту", () => reveal(p.id, "", true)]]];
+    return [p.name, [[REVEAL, () => reveal(p.id, "")], ["Відкрити теку проєкту", () => reveal(p.id, "", true)]]];
   }
   return null;
 }

@@ -1,4 +1,4 @@
-/* ByEar (наСлух) — клавіатура.
+/* Holosii (Голосій) — клавіатура.
    Звичайний (не модульний) скрипт: файли static/js/* вантажаться по черзі й ділять глобальну область. */
 /* ---------- клавіатура (працює і на українській розкладці) ---------- */
 document.addEventListener("keydown", (e) => {
@@ -11,7 +11,7 @@ document.addEventListener("keydown", (e) => {
     return;
   }
   const c = e.code;
-  if (S.view === "home") return;
+  if (S.view === "home" || S.view === "setup") return;
   if (S.view === "queue") {
     if (e.key === "Escape") { e.preventDefault(); goBack(); return; }
     if (c === "ArrowDown" || c === "ArrowUp") { e.preventDefault(); moveJob(c === "ArrowDown" ? 1 : -1); }

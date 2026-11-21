@@ -1,4 +1,4 @@
-// наСлух (ByEar) — оболонка для macOS.
+// Голосій (Holosii) — оболонка для macOS.
 // Запускає server.py (якщо він ще не працює), показує сторінку у власному вікні (WKWebView)
 // і при виході (⌘Q) зупиняє сервер разом з агентом. Якщо сервер запустили окремо — не чіпає його.
 import Cocoa
@@ -6,8 +6,8 @@ import WebKit
 
 
 func serverDir() -> String {
-    // Тека з server.py: ключ ByEarServerDir в Info.plist, інакше — тека, де лежить ByEar.app
-    if let d = Bundle.main.object(forInfoDictionaryKey: "ByEarServerDir") as? String,
+    // Тека з server.py: ключ HolosiiServerDir в Info.plist, інакше — тека, де лежить Holosii.app
+    if let d = Bundle.main.object(forInfoDictionaryKey: "HolosiiServerDir") as? String,
        FileManager.default.fileExists(atPath: d + "/server.py") { return d }
     return Bundle.main.bundleURL.deletingLastPathComponent().path
 }
@@ -23,6 +23,18 @@ func serverPort() -> Int {
 }
 let port = serverPort()
 let baseURL = URL(string: "http://localhost:\(port)/")!
+
+// Ключ доступу, який створює server.py (читати його може лише цей користувач); сторінку відкриваємо з ?t=ключ
+func accessToken() -> String {
+    let f = FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent("Library/Application Support/Holosii/token")
+    return ((try? String(contentsOf: f, encoding: .utf8)) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+}
+
+// Лише сам Голосій (localhost з нашим портом), а не інші локальні сервери
+func isOurs(host: String?, port p: Int?) -> Bool {
+    (host == "localhost" || host == "127.0.0.1") && p == port
+}
 
 final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNavigationDelegate {
     var window: NSWindow!
@@ -43,19 +55,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1320, height: 840),
                           styleMask: [.titled, .closable, .miniaturizable, .resizable],
                           backing: .buffered, defer: false)
-        window.title = "наСлух"
+        window.title = "Голосій"
         window.minSize = NSSize(width: 900, height: 560)
         window.contentView = web
         window.center()
-        window.setFrameAutosaveName("ByEarMain")
+        window.setFrameAutosaveName("HolosiiMain")
         window.makeKeyAndOrderFront(nil)
-        showMessage("Запускаю наСлух…")
+        showMessage("Запускаю Голосій…")
         start()
     }
 
     // ---------- сервер ----------
     func ping(_ done: @escaping (Bool) -> Void) {
-        var r = URLRequest(url: baseURL.appendingPathComponent("api/state"))
+        var r = URLRequest(url: baseURL.appendingPathComponent("api/ping"))
         r.timeoutInterval = 0.8
         URLSession.shared.dataTask(with: r) { _, resp, _ in
             done((resp as? HTTPURLResponse)?.statusCode == 200)
@@ -91,7 +103,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
             DispatchQueue.main.async {
                 guard let self = self, self.server === proc else { return }
                 self.server = nil
-                self.showMessage("Сервер наСлуху зупинився (код \(proc.terminationStatus)).<br>Журнал: logs/app_server.log<br><br><a href='byear:restart'>Запустити знову</a>")
+                self.showMessage("Сервер Голосія зупинився (код \(proc.terminationStatus)).<br>Журнал: logs/app_server.log<br><br><a href='holosii:restart'>Запустити знову</a>")
             }
         }
         do { try p.run() } catch { showMessage("Не вдалося запустити python3: \(error.localizedDescription)"); return }
@@ -110,7 +122,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
         }
     }
 
-    func load() { web.load(URLRequest(url: baseURL)) }
+    func load() {
+        var c = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)!
+        c.queryItems = [URLQueryItem(name: "t", value: accessToken())]
+        web.load(URLRequest(url: c.url!))
+    }
 
     func showMessage(_ html: String) {
         let page = """
@@ -136,8 +152,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
     func webView(_ w: WKWebView, requestMediaCapturePermissionFor origin: WKSecurityOrigin,
                  initiatedByFrame f: WKFrameInfo, type: WKMediaCaptureType,
                  decisionHandler: @escaping (WKPermissionDecision) -> Void) {
-        let local = origin.host == "localhost" || origin.host == "127.0.0.1"
-        decisionHandler(local && type == .microphone ? .grant : .deny)
+        decisionHandler(isOurs(host: origin.host, port: origin.port) && type == .microphone ? .grant : .deny)
     }
 
     // ---------- WebKit: діалоги, посилання ----------
@@ -173,8 +188,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
     func webView(_ w: WKWebView, decidePolicyFor a: WKNavigationAction,
                  decisionHandler done: @escaping (WKNavigationActionPolicy) -> Void) {
         guard let u = a.request.url else { return done(.allow) }
-        if u.scheme == "byear" { done(.cancel); showMessage("Запускаю наСлух…"); start(); return }
-        if u.host == "localhost" || u.host == "127.0.0.1" || u.scheme == "about" || u.scheme == "data" { return done(.allow) }
+        if u.scheme == "holosii" { done(.cancel); showMessage("Запускаю Голосій…"); start(); return }
+        if isOurs(host: u.host, port: u.port) || u.scheme == "about" || u.scheme == "data" { return done(.allow) }
         NSWorkspace.shared.open(u)
         done(.cancel)
     }
@@ -191,13 +206,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
         func item(_ t: String, _ a: Selector?, _ k: String, _ mods: NSEvent.ModifierFlags = .command) -> NSMenuItem {
             let i = NSMenuItem(title: t, action: a, keyEquivalent: k); i.keyEquivalentModifierMask = mods; return i
         }
-        sub("наСлух", [
-            item("Про наСлух", #selector(NSApplication.orderFrontStandardAboutPanel(_:)), ""),
+        sub("Голосій", [
+            item("Про Голосій", #selector(NSApplication.orderFrontStandardAboutPanel(_:)), ""),
             .separator(),
-            item("Сховати наСлух", #selector(NSApplication.hide(_:)), "h"),
+            item("Сховати Голосій", #selector(NSApplication.hide(_:)), "h"),
             item("Сховати інші", #selector(NSApplication.hideOtherApplications(_:)), "h", [.command, .option]),
             .separator(),
-            item("Вийти з наСлуху", #selector(NSApplication.terminate(_:)), "q"),
+            item("Вийти з Голосія", #selector(NSApplication.terminate(_:)), "q"),
         ])
         // ⌘Z / ⌘F спершу отримує сторінка (там свої скасування й пошук); меню — запасний шлях
         sub("Редагування", [

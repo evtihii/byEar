@@ -1,25 +1,30 @@
-/* ByEar (наСлух) — головна сторінка.
+/* Holosii (Голосій) — головна сторінка.
    Звичайний (не модульний) скрипт: файли static/js/* вантажаться по черзі й ділять глобальну область. */
 /* ---------- головна сторінка ---------- */
 const DOCS_URL = "/docs/";   // документація: static/docs/
+function queueCountHtml() {
+  const n = (S.jobs || []).filter((j) => j.status === "running" || j.status === "queued").length;
+  return n ? ` <span class="badge">${n}</span>` : "";
+}
 function renderHome() {
   const last = ls.get("lastProject");
   const cards = S.projects.map((p) => `
     <div class="pcard ${p.exists ? "" : "missing"}" data-open="${p.id}" title="${esc(p.path)}">
       <div class="pt"><span class="gi">${I.game}</span>${esc(p.name)}${p.id === last ? '<span class="last">ОСТАННІЙ</span>' : ""}</div>
       <div class="pp">${esc(p.path)}${p.exists ? "" : " — теки немає"}</div>
-      <div class="ps">
+      ${p.setup && p.setup.state !== "done" ? `<div class="ps"><span style="color:var(--accent)">${p.setup.running ? '<span class="spin"></span>' : "⚙"} Налаштування: ${esc(SETUP_STATE[p.setup.state] || p.setup.state)}</span></div>` : `<div class="ps">
         <span title="Прослухано">${I.headphones} <b>${p.heard || 0}</b></span>
         <span title="Готово" style="color:var(--green)">✓ <b>${p.ok || 0}</b></span>
         <span title="Виправити" style="color:var(--orange)">✎ <b>${p.fix || 0}</b></span>
         ${p.ready_folders ? `<span title="Теки, готові до вбудовування" style="color:var(--orange)">${I.box} <b>${p.ready_folders}</b></span>` : ""}
         ${p.embedded_folders ? `<span title="Вбудовані теки" style="color:var(--green)">${I.embtri} <b>${p.embedded_folders}</b></span>` : ""}
-      </div>
+      </div>`}
       ${p.last_change ? `<div class="pp">Остання позначка: ${esc(fdate(p.last_change))}</div>` : ""}
     </div>`).join("");
   $("home").innerHTML = `<div class="home-in">
-    <div class="home-top"><div class="big-icon">${I.headphones.replace('width="13" height="13"', 'width="30" height="30"')}</div>
-      <div><h1>наСлух</h1><p>ByEar — прослуховування й правка озвучки ігор</p></div><span class="grow"></span>
+    <div class="home-top"><div class="big-icon">${I.logo.replace('width="16" height="16"', 'width="38" height="38"')}</div>
+      <div><h1>Голосій</h1><p>Holosii — прослуховування й правка озвучки ігор</p></div><span class="grow"></span>
+      <button class="btn qlink" id="homeQueue" title="Черга правок агента">${I.queue} Черга${queueCountHtml()}</button>
       <a class="doc-link ${DOCS_URL ? "on" : ""}" ${DOCS_URL ? `href="${DOCS_URL}" target="_blank" rel="noopener"` : 'title="Документація ще не готова"'}>${I.book} Документація</a></div>
     <div class="home-h">Проєкти</div>
     <div class="pgrid">${cards}<div class="pcard add" id="homeAdd">${I.plus}&nbsp; Новий проєкт</div></div>
@@ -27,9 +32,10 @@ function renderHome() {
 }
 $("home").addEventListener("click", async (e) => {
   if (e.target.closest("#homeAdd")) { openSheet(); return; }
+  if (e.target.closest("#homeQueue")) { setView("queue"); return; }
   const c = e.target.closest("[data-open]"); if (!c) return;
   const id = c.dataset.open;
-  if (id === S.pid && S.project) setView("phrases", { restore: false }); else await openProject(id);
+  if (id === S.pid && S.project && !inSetup(id)) setView("phrases", { restore: false }); else await openProject(id);
 });
 const AG_ST = { stopped: "зупинено", starting: "запуск…", idle: "вільний", working: "працює", compacting: "стискає…", error: "помилка" };
 function kfmt(n) { return n == null ? "—" : n >= 1000 ? Math.round(n / 1000) + "к" : String(n); }
@@ -66,13 +72,18 @@ function setView(v, opts = {}) {
   }
   S.view = v;
   $("backBtn").hidden = v !== "queue";
-  document.querySelector(".app").classList.toggle("home", v === "home");
+  $("projBtn").hidden = v === "queue";
+  document.querySelector(".app").classList.toggle("home", v === "home" || v === "setup");
   $("homeRow").classList.toggle("sel", v === "home");
+  if (v === "setup") {
+    stopAll(); $("queueRow").classList.remove("sel"); $("foldersBlock").hidden = true;
+    renderProjects(); renderSetup(); return;
+  }
   if (v === "home") {
     stopAll(); $("queueRow").classList.remove("sel");
     $("projects").querySelectorAll(".sel").forEach((x) => x.classList.remove("sel"));
     $("folders").querySelectorAll(".sel").forEach((x) => x.classList.remove("sel"));
-    renderHome(); return;
+    renderHome(); loadProjects().catch(() => {}); return;
   }
   $("queueRow").classList.toggle("sel", v === "queue");
   document.querySelector(".filters").style.display = v === "queue" ? "none" : "";
@@ -86,7 +97,8 @@ function setView(v, opts = {}) {
     if (back && back.scroll != null) $("rows").scrollTop = back.scroll; else scrollToSel("center");
   }
 }
-function goBack() { if (S.view === "queue") setView(S.back && S.back.view === "home" ? "home" : "phrases"); }
+function goBack() { if (S.view === "queue") setView(S.back && (S.back.view === "home" || S.back.view === "setup") ? S.back.view : "phrases"); }
+$("projBtn").onclick = () => setView("home");
 $("backBtn").onclick = goBack;
 $("queueRow").onclick = () => (S.view === "queue" ? goBack() : setView("queue"));
 $("homeRow").onclick = () => setView("home");
@@ -131,7 +143,7 @@ function renderJobDetail() {
     const s = S.qsettings || {};
     const act = S.jobs.filter((x) => x.status === "running").length, wait = S.jobs.filter((x) => x.status === "queued").length;
     pane.style.display = "flex";
-    pane.innerHTML = `<div class="placeholder"><div><h2>Черга правок</h2>Агент ${act ? "працює" : "вільний"}, у черзі ${wait}.<br>Один агент на запуск наСлуху, модель ${esc(s.model || "")}.<br>Розмір його контексту — на смужці зліва; автостиснення на ${kfmt(s.auto_compact_at)}.<br><br>${S.jobs.some((x) => x.status === "done" || x.status === "cancelled") ? '<button class="btn" id="clearDone">Прибрати завершені</button>' : ""}</div></div>`;
+    pane.innerHTML = `<div class="placeholder"><div><h2>Черга правок</h2>Агент ${act ? "працює" : "вільний"}, у черзі ${wait}.<br>Один агент на запуск Голосія, модель ${esc(s.model || "")}.<br>Розмір його контексту — на смужці зліва; автостиснення на ${kfmt(s.auto_compact_at)}.<br><br>${S.jobs.some((x) => x.status === "done" || x.status === "cancelled") ? '<button class="btn" id="clearDone">Прибрати завершені</button>' : ""}</div></div>`;
     const cd = $("clearDone"); if (cd) cd.onclick = async () => { await api("/api/queue/clear", {}); S.jobSel = null; refreshQueue(true); };
     return;
   }

@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Holosii (Голосій) for Windows: a thin WebView2 window around server.py. Build: win\build.ps1 -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>Holosii</AssemblyName>
+    <RootNamespace>Holosii</RootNamespace>
+    <ApplicationIcon>Holosii.ico</ApplicationIcon>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <Product>Holosii</Product>
+    <Version>1.0.0</Version>
+    <!-- one Holosii.exe; WebView2Loader.dll is unpacked on first start -->
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2903.40" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Holosii.ico" LogicalName="Holosii.ico" />
+  </ItemGroup>
+</Project>

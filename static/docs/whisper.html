@@ -60,12 +60,12 @@ a { color: var(--accent); }
     <pre><code>mkdir -p ~/.cache/whisper
 curl -L -o ~/.cache/whisper/ggml-large-v3-turbo-q5_0.bin \
   https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin</code></pre>
-    <p class="note">наСлух сам шукає моделі в <code>~/.cache/whisper/</code> і бере найкращу з тих, що знайде.</p>
+    <p class="note">Голосій сам шукає моделі в <code>~/.cache/whisper/</code> і бере найкращу з тих, що знайде.</p>
   </div></div>
 
   <div class="card step"><div class="n">3</div><div>
-    <h3>Оновити наСлух</h3>
-    <p>Натисни <b>⌘R</b> у вікні наСлуху — кнопка «Диктувати» стане активною. Під час першого запису macOS спитає
+    <h3>Оновити Голосій</h3>
+    <p>Натисни <b>⌘R</b> у вікні Голосія — кнопка «Диктувати» стане активною. Під час першого запису macOS спитає
       дозвіл на мікрофон: натисни «Дозволити».</p>
   </div></div>
 
@@ -88,11 +88,11 @@ curl -L -o ~/.cache/whisper/ggml-large-v3-turbo-q5_0.bin \
     <a href="https://huggingface.co/ggerganov/whisper.cpp/tree/main" target="_blank" rel="noopener">huggingface.co/ggerganov/whisper.cpp</a>.</p>
 
   <h2>Налаштування</h2>
-  <p>У файлі <code>settings.json</code> поруч із наСлухом:</p>
+  <p>У файлі <code>settings.json</code> поруч із Голосієм:</p>
   <table>
     <tr><th>Поле</th><th>Що робить</th></tr>
     <tr><td><code>dictation_lang</code></td><td>Мова диктування, за замовчуванням <code>"uk"</code>.</td></tr>
-    <tr><td><code>whisper_model</code></td><td>Шлях до конкретної моделі, якщо не хочеш, щоб наСлух вибирав сам.</td></tr>
+    <tr><td><code>whisper_model</code></td><td>Шлях до конкретної моделі, якщо не хочеш, щоб Голосій вибирав сам.</td></tr>
     <tr><td><code>dictation_prompt</code></td><td>Підказка: імена й слова, які Whisper має писати правильно, наприклад
       <code>"Хінако, Сю, Сакуко, Рінко, Кото, Дзюнко"</code>.</td></tr>
   </table>
@@ -101,18 +101,18 @@ curl -L -o ~/.cache/whisper/ggml-large-v3-turbo-q5_0.bin \
   <div class="card warn">
     <p><b>Кнопка неактивна.</b> Наведи на неї — підказка скаже причину: немає <code>whisper-cli</code> або знайдено лише
       англійську модель. Після встановлення натисни ⌘R.</p>
-    <p><b>«Немає доступу до мікрофона».</b> Системні параметри → Приватність і безпека → Мікрофон → увімкни наСлух
-      (або браузер, якщо відкриваєш наСлух у ньому).</p>
+    <p><b>«Немає доступу до мікрофона».</b> Системні параметри → Приватність і безпека → Мікрофон → увімкни Голосій
+      (або браузер, якщо відкриваєш Голосій у ньому).</p>
     <p><b>Розпізнає не тією мовою.</b> Перевір <code>dictation_lang</code> у <code>settings.json</code> і що модель не <code>.en.bin</code>.</p>
     <p><b>Плутає імена.</b> Допиши їх у <code>dictation_prompt</code>.</p>
   </div>
 </main>
 <script>
-fetch("/api/dictation").then((r) => r.json()).then((d) => {
+fetch("/api/dictation").then((r) => r.ok ? r.json() : Promise.reject(r.status)).then((d) => {
   const s = document.getElementById("status");
   if (d.available) { s.textContent = `готово — модель ${d.model_name}, мова ${d.lang}`; s.style.color = "var(--ok)"; }
   else { s.textContent = d.reason || "недоступно"; s.style.color = "var(--warn)"; }
-}).catch(() => { document.getElementById("status").textContent = "наСлух не запущено"; });
+}).catch((e) => { document.getElementById("status").textContent = e === 401 ? "відкрийте цю сторінку з Голосія" : "Голосій не запущено"; });
 </script>
 </body>
 </html>

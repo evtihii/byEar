@@ -37,7 +37,11 @@ legacy/
 agent_workdir/
 
 # --- Build output and system files
+Holosii.app/
 ByEar.app/
+Holosii.exe
+win/bin/
+win/obj/
 __pycache__/
 *.pyc
 .DS_Store

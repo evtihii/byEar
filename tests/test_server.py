@@ -1,4 +1,4 @@
-"""Server tests: run with `python3 -m unittest discover -s tests` from the ByEar folder.
+"""Server tests: run with `python3 -m unittest discover -s tests` from the repository folder.
 
 Each test class starts a real server.py on a free port with a temporary project, temporary data folder
 and tests/fake_agent.py instead of Claude Code. Requires ffmpeg / ffprobe.
@@ -38,7 +38,7 @@ class Server:
     """Temporary project + server process."""
 
     def __init__(self, fake_mode="edit", settings=None):
-        self.tmp = tempfile.mkdtemp(prefix="byear_test_")
+        self.tmp = tempfile.mkdtemp(prefix="holosii_test_")
         game = os.path.join(self.tmp, "game")
         a = os.path.join(game, "grp", "01_a")
         b = os.path.join(game, "grp", "02_b")
@@ -64,6 +64,10 @@ class Server:
                 json.dump(settings, f)
         fake = os.path.join(HERE, "fake_agent.py")
         os.chmod(fake, 0o755)
+        if os.name == "nt":                          # Windows cannot run a .py directly: wrap it in a .cmd
+            fake = os.path.join(self.tmp, "fake_claude.cmd")
+            with open(fake, "w") as f:
+                f.write(f'@"{sys.executable}" "{os.path.join(HERE, "fake_agent.py")}" %*\n')
         self.port = free_port()
         env = dict(os.environ, SLUHACH_PROJECTS=self.projects, SLUHACH_DATA=self.data,
                    SLUHACH_CLAUDE=fake, PORT=str(self.port), FAKE_MODE=fake_mode,
@@ -81,6 +85,10 @@ class Server:
     def req(self, method, path, body=None, headers=None):
         c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=30)
         h = {"Host": f"localhost:{self.port}"}
+        tf = os.path.join(self.data, "token")         # ключ доступу, який сервер створює в SLUHACH_DATA
+        if os.path.exists(tf):
+            with open(tf, encoding="utf-8") as f:
+                h["Cookie"] = f"holosii_{self.port}={f.read().strip()}"
         data = None
         if body is not None:
             data = body if isinstance(body, (bytes, str)) else json.dumps(body)
@@ -149,6 +157,56 @@ class SecurityAndPages(unittest.TestCase):
         # a cross-site page can send text/plain without a CORS preflight — must be refused
         st, _ = self.s.post("/api/state", '{"last_project": "x"}', headers={"Content-Type": "text/plain"})
         self.assertEqual(st, 403)
+
+    def test_no_key_rejected(self):
+        # без ключа доступу (інша програма чи інший користувач цього комп'ютера) — нічого не можна
+        no = {"Cookie": ""}
+        self.assertEqual(self.s.get("/api/projects", headers=no)[0], 401)
+        self.assertEqual(self.s.get(f"/file?p={self.s.pid}&f=grp/01_a/en.wav", headers=no)[0], 401)
+        self.assertEqual(self.s.post("/api/state", {"last_project": "x"}, headers=no)[0], 401)
+        self.assertEqual(self.s.post("/api/queue/add", {}, headers={"Cookie": f"holosii_{self.s.port}=wrong"})[0], 401)
+        st, body = self.s.get("/", headers=no)
+        self.assertEqual(st, 401)
+        self.assertIn("ключа доступу".encode(), body)
+        self.assertEqual(self.s.get("/api/ping", headers=no), (200, {"app": "holosii"}))
+
+    def test_key_link_sets_cookie(self):
+        with open(os.path.join(self.s.data, "token"), encoding="utf-8") as f:
+            tok = f.read().strip()
+        if os.name != "nt":
+            self.assertEqual(os.stat(os.path.join(self.s.data, "token")).st_mode & 0o077, 0)
+        c = http.client.HTTPConnection("127.0.0.1", self.s.port, timeout=10)
+        c.request("GET", "/?t=" + tok, headers={"Host": f"localhost:{self.s.port}"})
+        r = c.getresponse()
+        r.read()
+        self.assertEqual(r.status, 303)
+        self.assertEqual(r.getheader("Location"), "/")
+        ck = r.getheader("Set-Cookie")
+        self.assertIn(f"holosii_{self.s.port}={tok}", ck)
+        self.assertIn("HttpOnly", ck)
+        self.assertIn("SameSite=Strict", ck)
+        self.assertEqual(self.s.get("/?t=wrong", headers={"Cookie": ""})[0], 403)
+
+    def test_security_headers(self):
+        c = http.client.HTTPConnection("127.0.0.1", self.s.port, timeout=10)
+        c.request("GET", "/", headers={"Host": f"localhost:{self.s.port}",
+                                       "Cookie": self._cookie()})
+        r = c.getresponse()
+        r.read()
+        self.assertEqual(r.status, 200)
+        self.assertIn("script-src 'self'", r.getheader("Content-Security-Policy"))
+        self.assertIn("frame-ancestors 'none'", r.getheader("Content-Security-Policy"))
+        self.assertEqual(r.getheader("X-Content-Type-Options"), "nosniff")
+        self.assertEqual(r.getheader("Cross-Origin-Resource-Policy"), "same-origin")
+
+    def test_huge_body_rejected(self):
+        st, _ = self.s.req("POST", "/api/state", headers={"Content-Type": "application/json",
+                                                           "Content-Length": str(200 * 1024 * 1024)}, body=b"{}")
+        self.assertEqual(st, 403)
+
+    def _cookie(self):
+        with open(os.path.join(self.s.data, "token"), encoding="utf-8") as f:
+            return f"holosii_{self.s.port}={f.read().strip()}"
 
     def test_own_origin_allowed(self):
         st, _ = self.s.post("/api/state", {"last_project": "x"},
@@ -232,6 +290,13 @@ class AgentJobs(unittest.TestCase):
         self.assertIn("seven_day", lim["windows"])
         st, r = self.s.post("/api/limits/refresh", {})
         self.assertEqual(st, 200)
+
+    def test_queued_line_is_marked_fix(self):
+        st, r = self.s.post("/api/queue/add?p=" + self.s.pid, {"item": "grp/02_b", "comment": "з оркестратора"})
+        self.assertEqual(st, 200)
+        st, d = self.s.get("/api/project?p=" + self.s.pid)
+        self.assertEqual(d["feedback"]["grp/02_b"]["status"], "fix")
+        self.s.wait_job(r["job"]["id"])
 
     def test_default_and_no_reference(self):
         st, r = self.s.post("/api/queue/add?p=" + self.s.pid, {"item": "grp/02_b", "comment": "x"})
@@ -512,6 +577,82 @@ class Dictation(unittest.TestCase):
             self.assertEqual(s.get("/static/docs/../../server.py")[0], 404)
         finally:
             s.close()
+
+
+class ProjectSetup(unittest.TestCase):
+    """New project from a game: survey → plan → extraction → open as a normal project."""
+    @classmethod
+    def setUpClass(cls):
+        cls.s = Server("edit")
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.s.close()
+
+    def add(self, name, game_name):
+        game = os.path.join(self.s.tmp, game_name)
+        os.makedirs(game, exist_ok=True)
+        tone(os.path.join(game, "voice_en.wav"), 220)
+        ws = os.path.join(self.s.tmp, "ws_" + game_name)
+        st, r = self.s.post("/api/projects/add", {"name": name, "game": game, "workspace": ws})
+        self.assertEqual(st, 200, r)
+        return r["id"], game, ws
+
+    def wait(self, pid, until, timeout=20):
+        for _ in range(int(timeout * 10)):
+            st, d = self.s.get("/api/setup?p=" + pid)
+            if not d["setup"]["running"] and d["setup"]["state"] in until:
+                return d["setup"]
+            time.sleep(0.1)
+        self.fail(f"setup did not reach {until}: {d['setup']['state']}")
+
+    def test_full_flow(self):
+        pid, game, ws = self.add("Гра", "realgame")
+        st, projects = self.s.get("/api/projects")
+        p = next(x for x in projects if x["id"] == pid)
+        self.assertEqual(p["setup"]["state"], "new")
+        self.assertEqual(p["path"], os.path.join(ws, "listen"))
+        # extraction before a plan is refused
+        st, r = self.s.post("/api/setup/start?p=" + pid, {"kind": "extract"})
+        self.assertEqual(st, 400)
+        self.s.post("/api/setup/start?p=" + pid, {"kind": "survey"})
+        sst = self.wait(pid, ("plan",))
+        self.assertEqual(sst["plan"]["languages"][0]["lines"], 2)
+        self.assertTrue(any(m["role"] == "agent" for m in sst["messages"]))
+        st, raw = self.s.get("/api/setup/file?p=" + pid + "&f=samples/01_en.wav")
+        self.assertEqual(st, 200)
+        self.assertEqual(raw[:4], b"RIFF")
+        st, _ = self.s.get("/api/setup/file?p=" + pid + "&f=../../realgame/voice_en.wav")
+        self.assertEqual(st, 404)                    # nothing outside the workspace's .holosii
+        self.s.post("/api/setup/start?p=" + pid, {"kind": "extract", "text": "тільки англійська"})
+        sst = self.wait(pid, ("ready",))
+        self.assertEqual(sst["result"]["lines"], 2)
+        self.s.post("/api/setup/start?p=" + pid, {"kind": "talk", "text": "привіт"})
+        sst = self.wait(pid, ("ready",))
+        self.assertIn("привіт", sst["messages"][-2]["text"])
+        st, r = self.s.post("/api/setup/finish?p=" + pid, {})
+        self.assertEqual(st, 200, r)
+        st, projects = self.s.get("/api/projects")
+        p = next(x for x in projects if x["id"] == pid)
+        self.assertEqual(p["setup"]["state"], "done")
+        self.assertEqual(p["agent_brief"], os.path.join(ws, "BRIEF.md"))
+        self.assertEqual(p["pack_cmd"][-1], ws + "/tools/pack.py")
+        st, d = self.s.get("/api/project?p=" + pid)
+        self.assertEqual(len(d["items"]), 2)
+        self.assertEqual(os.listdir(game), ["voice_en.wav"])      # the game folder is untouched
+
+    def test_blocked_and_bad_folders(self):
+        pid, game, ws = self.add("Locked", "LOCKEDgame")
+        self.s.post("/api/setup/start?p=" + pid, {"kind": "survey"})
+        sst = self.wait(pid, ("blocked",))
+        self.assertTrue(sst["plan"]["blocked"])
+        st, r = self.s.post("/api/setup/start?p=" + pid, {"kind": "extract"})
+        self.assertEqual(st, 400)
+        # the workspace may not be inside the game folder
+        st, r = self.s.post("/api/projects/add", {"name": "x", "game": game, "workspace": os.path.join(game, "ws")})
+        self.assertEqual(st, 400)
+        st, r = self.s.post("/api/projects/add", {"name": "x", "game": os.path.join(self.s.tmp, "nope")})
+        self.assertEqual(st, 400)
 
 
 class Pitch(unittest.TestCase):

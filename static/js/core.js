@@ -1,4 +1,4 @@
-/* ByEar (наСлух) — іконки, стан, проєкти, теки й готовність до вбудовування.
+/* Holosii (Голосій) — іконки, стан, проєкти, теки й готовність до вбудовування.
    Звичайний (не модульний) скрипт: файли static/js/* вантажаться по черзі й ділять глобальну область. */
 "use strict";
 /* ---------- іконки (у стилі SF Symbols) ---------- */
@@ -27,6 +27,7 @@ const I = {
   box: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><path d="M3.5 7.5 12 3l8.5 4.5v9L12 21l-8.5-4.5z"/><path d="M3.5 7.5 12 12l8.5-4.5M12 12v9"/></svg>',
   embtri: '<svg width="15" height="14" viewBox="0 0 24 22"><path d="M10.3 1.9a2 2 0 0 1 3.4 0l9.6 16.6a2 2 0 0 1-1.7 3H2.4a2 2 0 0 1-1.7-3z" fill="currentColor"/><path d="M12 7.2v6.3" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/><circle cx="12" cy="17.2" r="1.45" fill="#fff"/></svg>',
   shipped: '<svg width="14" height="14" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="currentColor"/><path d="m7.5 12.3 3 3 6-6.3" fill="none" stroke="var(--sidebar)" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  logo: '<svg width="16" height="16" viewBox="14 14 92 92"><path d="M29 40Q37 28 45 40M75 40Q83 28 91 40" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round"/><path d="M30 58H90Q90 94 60 94Q30 94 30 58Z" fill="currentColor"/><g fill="#fff"><rect x="41" y="66" width="5" height="10" rx="2.5"/><rect x="50" y="62" width="5" height="20" rx="2.5"/><rect x="59" y="64" width="5" height="16" rx="2.5"/><rect x="68" y="62" width="5" height="20" rx="2.5"/><rect x="77" y="66" width="5" height="10" rx="2.5"/></g></svg>',   /* біла плитка, чорне обличчя з хвилею в роті — та сама фігура, що в mac/make_icon.swift */
   house: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M4 10.5 12 4l8 6.5V19a1 1 0 0 1-1 1h-4.5v-5.5h-5V20H5a1 1 0 0 1-1-1z"/></svg>',
   book: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11v16H5.5A1.5 1.5 0 0 1 4 18.5zM20 5.5A1.5 1.5 0 0 0 18.5 4H13v16h5.5a1.5 1.5 0 0 0 1.5-1.5z"/></svg>',
   mic: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg>',
@@ -47,11 +48,14 @@ let SOURCE = ["en","eng","orig","original","src","ref","ja","jp","jpn","old"];
 let TARGET = ["ua","uk","ukr","new"];
 let LANG_ALIAS = { eng: "en", jp: "ja", jpn: "ja", uk: "ua", ukr: "ua" };
 let LANG_NAME = { en: "англійська", ja: "японська", ua: "українська" };
+let REVEAL = "Показати у Finder";               /* на Windows сервер дає «Показати у Провіднику» */
 async function loadConfig() {
   try {
     const c = await api("/api/config");
     SOURCE = c.source_tags || SOURCE; TARGET = c.target_tags || TARGET;
     LANG_ALIAS = c.lang_alias || LANG_ALIAS; LANG_NAME = c.lang_names || LANG_NAME;
+    REVEAL = c.reveal_label || REVEAL;
+    const rb = document.getElementById("revealBtn"); if (rb) rb.title = REVEAL;
   } catch {}
 }
 function langName(code) { const pr = S.projects.find((x) => x.id === S.pid) || {}; return ({ ...LANG_NAME, ...(pr.lang_names || {}) })[code]; }
@@ -133,13 +137,14 @@ function renderProjects() {
   el.innerHTML = S.projects.map((p) => `
     <div class="side-row ${p.id === S.pid ? "sel" : ""} ${p.exists ? "" : "missing"}" data-pid="${p.id}" title="${esc(p.path)}">
       <span class="ic">${I.game}</span><span class="nm">${esc(p.name)}</span>
-      ${p.fix ? `<span class="badge" title="Позначено «виправити»">${p.fix}</span>` : ""}
+      ${inSetup(p.id) ? `<span class="badge setup" title="Налаштування проєкту не завершено">${p.setup.running ? '<span class="spin"></span>' : "⚙"}</span>` : p.fix ? `<span class="badge" title="Позначено «виправити»">${p.fix}</span>` : ""}
     </div>`).join("");
   $("removeBtn").disabled = !S.pid;
 }
 $("projects").addEventListener("click", (e) => {
   const r = e.target.closest("[data-pid]"); if (!r) return;
-  if (S.view === "home") { if (r.dataset.pid === S.pid) { setView("phrases", { restore: false }); return; } }
+  if (S.view === "home" && r.dataset.pid === S.pid) { setView(inSetup(S.pid) ? "setup" : "phrases", { restore: false }); return; }
+  if (S.view === "setup" && r.dataset.pid === S.pid) return;
   if (S.view === "queue") { setView("phrases"); if (r.dataset.pid === S.pid) return; }   // той самий проєкт — як «Назад»
   if (r.dataset.pid !== S.pid) openProject(r.dataset.pid);
 });
@@ -150,12 +155,20 @@ $("projects").addEventListener("dblclick", async (e) => {
   if (name && name.trim()) { await api("/api/projects/rename", { id: p.id, name }); await loadProjects(); }
 });
 
+/* проєкт з гри, налаштування якого ще не завершено → вікно налаштування замість списку фраз */
+function inSetup(pid) { const p = S.projects.find((x) => x.id === pid); return !!(p && p.setup && p.setup.state !== "done"); }
 async function openProject(pid, keepSel) {
   stopAll();
   S.pid = pid; ls.set("lastProject", pid);
   api("/api/state", { last_project: pid }).catch(() => {});
+  if (inSetup(pid)) {
+    S.project = null; S.items = []; S.byId = new Map(); $("foldersBlock").hidden = true;
+    renderProjects();
+    if (S.view === "setup") renderSetup(); else setView("setup");
+    return;
+  }
   loadUsage(false);
-  if (S.view === "home") setView("phrases", { restore: false });
+  if (S.view === "home" || S.view === "setup") setView("phrases", { restore: false });
   renderProjects();
   $("rows").innerHTML = '<div class="empty">Читаю папку…</div>';
   $("pane").innerHTML = "";
@@ -169,6 +182,7 @@ async function openProject(pid, keepSel) {
   S.byId = new Map(S.items.map((it) => [it.id, it]));
   S.fb = data.feedback || {};
   S.folders = data.folders || {};
+  S.reviews = data.reviews || {};
   // незбережені зміни з браузера мають пріоритет
   S.pending = ls.get("pending." + pid, {});
   for (const [id, e] of Object.entries(S.pending)) { if (e) S.fb[id] = e; else delete S.fb[id]; }
@@ -328,3 +342,14 @@ $("folders").addEventListener("click", (e) => {
   if (S.label) { const pp = S.label.split("/"); for (let i = 1; i <= pp.length; i++) S.open[pp.slice(0, i).join("/")] = true; ls.set("open." + S.pid, S.open); }
   saveView(); renderFolders(); renderFilters(); renderList(); scrollToSel("center");
 });
+/* Значок «агент працює» створюється заново при кожному оновленні черги, і обертання починалося б з нуля —
+   звідси ривки. Кожен новий значок стає в ту саму фазу, що й годинник, тож перемальовування непомітне. */
+const SPIN_MS = 800;
+function syncSpin(el) { el.style.animationDelay = `-${Math.round(performance.now() % SPIN_MS)}ms`; }
+new MutationObserver((muts) => {
+  for (const m of muts) for (const n of m.addedNodes) {
+    if (n.nodeType !== 1) continue;
+    if (n.classList.contains("spin")) syncSpin(n);
+    n.querySelectorAll && n.querySelectorAll(".spin").forEach(syncSpin);
+  }
+}).observe(document.documentElement, { childList: true, subtree: true });

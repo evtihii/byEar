@@ -1,10 +1,10 @@
-"""Черга правок і агенти Claude Code для наСлуху (ByEar), а також зміна гучності скриптом.
+"""Черга правок і агенти Claude Code для Голосія (Holosii), а також зміна гучності скриптом.
 
 Черга — «queue.json», налаштування — «settings.json»,
 журнали роботи — тека «logs/». Усе лежить поруч із сервером (або в SLUHACH_DATA для тестів).
 
-Агент один на запуск наСлуху: постійний процес Claude Code, правки йдуть йому по черзі.
-Розмір його контексту видно в наСлуху; «Стиснути» (/compact) або автоматично на порозі auto_compact_at.
+Агент один на запуск Голосія: постійний процес Claude Code, правки йдуть йому по черзі.
+Розмір його контексту видно в Голосії; «Стиснути» (/compact) або автоматично на порозі auto_compact_at.
 """
 import json
 import os
@@ -18,6 +18,7 @@ import time
 import uuid
 
 import analysis
+import platform_util
 import tempo
 import echo
 
@@ -26,11 +27,11 @@ DATA = os.environ.get("SLUHACH_DATA") or HERE
 QUEUE_FILE = os.path.join(DATA, "queue.json")
 SETTINGS_FILE = os.path.join(DATA, "settings.json")
 LOGS_DIR = os.path.join(DATA, "logs")
-VOLUME_TRASH = os.path.expanduser("~/.Trash/ByEar_volume")
+VOLUME_TRASH = platform_util.trash_dir("Holosii_volume")
 HISTORY_DIR = os.path.join(DATA, "history")      # версії файлів для «Скасувати» (⌘Z) і «Повторити» (⌘⇧Z)
 HISTORY_MAX = 30
 BEFORE_DIR = os.path.join(DATA, "before")        # версія файлу до правки агента (для «до / після»)
-OLD_LOGS_TRASH = os.path.expanduser("~/.Trash/ByEar_old_logs")
+OLD_LOGS_TRASH = platform_util.trash_dir("Holosii_old_logs")
 KEEP_LOGS = 300                                  # журналів правок лишати
 KEEP_BEFORE = 150                                # копій «до правки» лишати
 AGENT_LOG_MAX = 5 * 1024 * 1024
@@ -41,10 +42,16 @@ DEFAULT_SETTINGS = {
     "auto_compact_at": 100000,       # стискати контекст, коли він більший (0 — лише вручну)
     "timeout_min": 25,               # максимум хвилин на одну правку
     "max_job_tokens": 1000000,       # ліміт токенів на одну правку (0 — без ліміту)
-    "port": 8765,                    # порт сервера (і ByEar.app); змінна PORT має перевагу
+    "port": 8765,                    # порт сервера (і Holosii.app); змінна PORT має перевагу
     "dictation_lang": "uk",          # мова диктування (Whisper)
     "whisper_model": "",             # шлях до моделі Whisper; порожньо — знайти найкращу в ~/.cache/whisper
     "dictation_prompt": "",          # підказка Whisper: імена й терміни, які треба писати правильно
+    "setup_model": "claude-opus-5-5",  # агент налаштування проєкту (видобування з гри) — сильніша модель
+    "setup_max_tokens": 5000000,     # ліміт токенів на один крок налаштування (0 — без ліміту)
+    "setup_timeout_min": 180,        # максимум хвилин на один крок налаштування
+    # Пісочниця Claude Code для Bash агентів (macOS / Linux): писати лише в теки проєкту, мережа — лише ці домени
+    "agent_sandbox": False,
+    "agent_sandbox_domains": ["api.elevenlabs.io"],
 }
 OBSOLETE = ("workers", "reset_after")
 TOOLS = "Bash,Read,Write,Edit,Glob,Grep"
@@ -84,20 +91,38 @@ def load_settings():
     return s
 
 
-def which(name, extra=()):
-    p = shutil.which(name)
-    if p:
-        return p
-    for d in extra:
-        c = os.path.join(os.path.expanduser(d), name)
-        if os.path.exists(c):
-            return c
-    return None
+which = platform_util.which                      # PATH + Homebrew / winget / scoop / npm folders
 
 
-CLAUDE = os.environ.get("SLUHACH_CLAUDE") or which("claude", ["~/.local/bin", "/opt/homebrew/bin", "/usr/local/bin"])
-FFMPEG = which("ffmpeg", ["/opt/homebrew/bin", "/usr/local/bin"])
-FFPROBE = which("ffprobe", ["/opt/homebrew/bin", "/usr/local/bin"])
+def write_claude_settings(settings):
+    """agent_settings.json для агентів Claude Code: без хуків; з agent_sandbox — Bash у пісочниці.
+
+    У пісочниці Bash пише лише в робочу теку, теки --add-dir (проєкт, гра), $TMPDIR і кошик Голосія;
+    мережа — лише agent_sandbox_domains; без пісочниці команда не виконається (allowUnsandboxedCommands).
+    На Windows пісочниці Claude Code немає — налаштування там не діє (видно в журналі агента).
+    Повертає шлях до файлу і примітку для журналу ('' якщо нічого казати)."""
+    path = os.path.join(DATA, "agent_settings.json")
+    cfg = {"disableAllHooks": True}
+    note = ""
+    if settings.get("agent_sandbox"):
+        if platform_util.IS_WIN:
+            note = "agent_sandbox: на Windows пісочниці Claude Code немає — Bash агента без обмежень"
+        else:
+            cfg["sandbox"] = {
+                "enabled": True,
+                "failIfUnavailable": True,              # не працювати мовчки без пісочниці
+                "autoAllowBashIfSandboxed": True,
+                "allowUnsandboxedCommands": False,      # агент не може попросити «без пісочниці»
+                "filesystem": {"allowWrite": [platform_util.trash_root()]},
+                "network": {"allowedDomains": [str(d) for d in settings.get("agent_sandbox_domains") or []]},
+            }
+            note = "пісочниця Bash увімкнена (agent_sandbox)"
+    _write_json(path, cfg)
+    return path, note
+
+CLAUDE = os.environ.get("SLUHACH_CLAUDE") or which("claude")
+FFMPEG = which("ffmpeg")
+FFPROBE = which("ffprobe")
 
 
 # ---------- черга ----------
@@ -208,7 +233,7 @@ def read_log(job_id, limit=12000):
 
 
 # ---------- агент ----------
-# Один агент Claude Code на один запуск наСлуху: постійний процесс `claude -p --input-format stream-json`,
+# Один агент Claude Code на один запуск Голосія: постійний процесс `claude -p --input-format stream-json`,
 # якому правки передаються по черзі. Він стартує в окремій теці (щоб не підвантажувати CLAUDE.md проєктів),
 # з 6 інструментами, без хуків і MCP — так стартовий контекст ~8 тис. токенів замість ~35 тис.
 
@@ -245,15 +270,15 @@ class Agent:
         self.stop()
         cwd = os.path.join(DATA, "agent_workdir")
         os.makedirs(cwd, exist_ok=True)
-        sett = os.path.join(DATA, "agent_settings.json")
-        _write_json(sett, {"disableAllHooks": True})
+        sett, sandbox_note = write_claude_settings(settings)
         cmd = [CLAUDE, "-p", "--model", settings["model"], "--input-format", "stream-json",
                "--output-format", "stream-json", "--verbose", "--permission-mode", "acceptEdits",
                "--tools", TOOLS, "--allowedTools", TOOLS, "--settings", sett, "--strict-mcp-config", "--no-chrome"]
         for d in sorted(dirs):
             cmd += ["--add-dir", d]
         self.proc = subprocess.Popen(cmd, cwd=cwd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                     stderr=subprocess.STDOUT, text=True, bufsize=1)
+                                     stderr=subprocess.STDOUT, text=True, bufsize=1, **platform_util.ENC,
+                                     **platform_util.no_window_kwargs())
         self.events = queue.Queue()
         proc, evq = self.proc, self.events
 
@@ -289,7 +314,7 @@ class Agent:
         self.started = _now()
         self.error = None
         self.state = "idle"
-        self._log(f"=== {_now()} агент запущено, модель {settings['model']}")
+        self._log(f"=== {_now()} агент запущено, модель {settings['model']}" + (f"; {sandbox_note}" if sandbox_note else ""))
 
     def stop(self):
         if self.alive():
@@ -457,7 +482,7 @@ def _prompt(job, project, first):
         f"Коментар користувача: «{job['comment']}»\n\n"
         + ref +
         f"Зроби правку за пам'яткою. Результат — один файл поверх {os.path.join(root, tf['path']) if tf else '(файл UA)'} "
-        "(стару версію спершу збережи в Кошик). Онови опис у текстовому файлі фрази. Нічого не вбудовуй у гру.\n"
+        f"(стару версію спершу збережи в Кошик{platform_util.agent_trash_hint()}). Онови опис у текстовому файлі фрази. Нічого не вбудовуй у гру.\n"
         "Наприкінці відповідай 1–3 реченнями українською: що зроблено і на що звернути увагу при прослуховуванні."
     )
 
@@ -564,7 +589,7 @@ def _worker(find_project):
 
 # ---------- кредити сервісу генерації (ElevenLabs тощо) ----------
 # Проєкт може мати "usage_cmd": команда (список аргументів), що друкує JSON {"used", "limit", "reset"}.
-# Ключ API лишається в проєкті: наСлух лише запускає команду. Різниця «до / після» — ціна генерації правки.
+# Ключ API лишається в проєкті: Голосій лише запускає команду. Різниця «до / після» — ціна генерації правки.
 _usage_cache = {}
 USAGE_TTL = 120
 
@@ -578,7 +603,7 @@ def project_usage(project, fresh=False):
     if c and not fresh and time.time() - c["_t"] < USAGE_TTL:
         return {k: v for k, v in c.items() if k != "_t"}
     try:
-        r = subprocess.run([str(x) for x in cmd], capture_output=True, text=True, timeout=20,
+        r = subprocess.run([str(x) for x in cmd], capture_output=True, text=True, **platform_util.ENC, timeout=20,
                            cwd=project.get("agent_cwd") or None)
         d = json.loads(r.stdout.strip().splitlines()[-1])
         if not isinstance(d.get("used"), (int, float)):
@@ -595,7 +620,7 @@ def project_usage(project, fresh=False):
 
 # --- ліміти плану Claude ---
 # Claude Code сам повідомляє їх у потоці подій («rate_limit_event»): частка використаного 5-годинного й
-# тижневого вікна і коли воно скинеться. наСлух лише запам'ятовує останнє — вхід в акаунт не потрібен.
+# тижневого вікна і коли воно скинеться. Голосій лише запам'ятовує останнє — вхід в акаунт не потрібен.
 _limits_lock = threading.Lock()
 _limits_refreshing = False
 LIMITS_WINDOWS = ("five_hour", "seven_day", "seven_day_opus", "seven_day_sonnet")
@@ -648,11 +673,11 @@ def refresh_limits(wait=False):
         try:
             cwd = os.path.join(DATA, "agent_workdir")
             os.makedirs(cwd, exist_ok=True)
-            _write_json(os.path.join(DATA, "agent_settings.json"), {"disableAllHooks": True})
+            write_claude_settings(load_settings())
             p = subprocess.run([CLAUDE, "-p", "--model", "haiku", "--output-format", "stream-json", "--verbose",
                                 "--tools", "", "--strict-mcp-config", "--no-chrome", "--no-session-persistence",
                                 "--settings", os.path.join(DATA, "agent_settings.json")],
-                               cwd=cwd, input="Reply with: ok", capture_output=True, text=True, timeout=90)
+                               cwd=cwd, input="Reply with: ok", capture_output=True, text=True, **platform_util.ENC, timeout=90)
             for line in p.stdout.splitlines():
                 try:
                     ev = json.loads(line)
@@ -747,9 +772,10 @@ def _rotate(folder, keep, skip=()):
 
 
 def rotate_logs():
+    threading.Thread(target=platform_util.sweep_trash, daemon=True).start()   # Windows: old trash → Recycle Bin
     _rotate(LOGS_DIR, KEEP_LOGS, skip=("agent.log", "app_server.log"))
     _rotate(BEFORE_DIR, KEEP_BEFORE)
-    for name in ("agent.log",):                      # app_server.log ByEar.app перестворює сам
+    for name in ("agent.log",):                      # app_server.log Holosii.app перестворює сам
         f = os.path.join(LOGS_DIR, name)
         try:
             if os.path.getsize(f) > AGENT_LOG_MAX:
@@ -768,7 +794,7 @@ def start_workers(find_project, target_tags, source_tags):
         for j in q:
             if j["status"] == "running":
                 j["status"] = "queued"
-                j["note"] = "перезапущено після зупинки наСлуху"
+                j["note"] = "перезапущено після зупинки Голосія"
         save_queue(q)
     if CLAUDE:
         try:
@@ -786,7 +812,7 @@ def _codec_args(full):
         c = "pcm_s16le"
         if FFPROBE:
             r = subprocess.run([FFPROBE, "-v", "quiet", "-select_streams", "a:0", "-show_entries",
-                                "stream=codec_name", "-of", "csv=p=0", full], capture_output=True, text=True)
+                                "stream=codec_name", "-of", "csv=p=0", full], capture_output=True, text=True, **platform_util.ENC)
             c = r.stdout.strip() or c
         return ["-c:a", c]
     if ext == ".mp3":
@@ -854,7 +880,7 @@ def history_step(full, redo=False):
         tmp = full + ".tmp" + os.path.splitext(full)[1].lower()
         shutil.copyfile(snap, tmp)
         os.replace(tmp, full)
-        os.utime(full, None)                         # новий час — наСлух побачить, що файл змінився
+        os.utime(full, None)                         # новий час — Голосій побачить, що файл змінився
         try:
             os.remove(snap)
         except OSError:
@@ -864,7 +890,7 @@ def history_step(full, redo=False):
 
 
 def _backup(full, rel):
-    """Стару версію — у ~/.Trash/ByEar_volume/ (назва латиницею)."""
+    """Стару версію — у ~/.Trash/Holosii_volume/ (назва латиницею)."""
     os.makedirs(VOLUME_TRASH, exist_ok=True)
     safe = re.sub(r"[^A-Za-z0-9_.-]+", "_", rel.replace(os.sep, "__")).strip("_") or "file"
     shutil.copy2(full, os.path.join(VOLUME_TRASH, f"{time.strftime('%Y%m%d_%H%M%S')}_{safe}"))
@@ -876,7 +902,7 @@ def _measure(full, start=None, end=None):
     if start is not None:
         cut = ["-ss", f"{start:.3f}", "-t", f"{max(0.01, end - start):.3f}"]
     r = subprocess.run([FFMPEG, "-hide_banner", "-nostats", *cut, "-i", full, "-af", "ebur128,astats=metadata=0",
-                        "-f", "null", "-"], capture_output=True, text=True)
+                        "-f", "null", "-"], capture_output=True, text=True, **platform_util.ENC)
     txt = r.stderr
     lufs = None
     m = re.findall(r"I:\s+(-?[\d.]+|-inf) LUFS", txt)
@@ -892,7 +918,7 @@ def _measure(full, start=None, end=None):
 
 def _duration(full):
     r = subprocess.run([FFPROBE, "-v", "quiet", "-show_entries", "format=duration", "-of", "csv=p=0", full],
-                       capture_output=True, text=True)
+                       capture_output=True, text=True, **platform_util.ENC)
     try:
         return float(r.stdout.strip())
     except ValueError:
@@ -1026,7 +1052,7 @@ def audio_edit(full, rel, op, db=0.0, start=None, end=None, ref=None):
     ext = os.path.splitext(full)[1].lower()
     tmp = full + ".tmp" + ext
     r = subprocess.run([FFMPEG, "-v", "error", "-y", "-i", full, "-af", af, "-map_metadata", "0",
-                        *_codec_args(full), tmp], capture_output=True, text=True)
+                        *_codec_args(full), tmp], capture_output=True, text=True, **platform_util.ENC)
     if r.returncode != 0:
         try:
             os.remove(tmp)

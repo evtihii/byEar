@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""наСлух (англ. ByEar) — локальний плеєр для прослуховування реплік з ігор.
+"""Голосій (англ. Holosii) — локальний плеєр для прослуховування реплік з ігор.
 
-Запуск:  python3 server.py        (або подвійний клік по «ByEar.command»)
+Запуск:  python3 server.py        (або подвійний клік по «Holosii.command»)
 Відкриває http://localhost:8765 у браузері.
 
 Проєкти (ігри) записані в «projects.json» поруч зі скриптом.
@@ -9,6 +9,7 @@
 Сервер слухає лише 127.0.0.1 — ззовні до нього не достукатись.
 """
 import hashlib
+import hmac
 import json
 import os
 import re
@@ -20,6 +21,9 @@ import webbrowser
 
 import agents
 import dictation
+import platform_util
+import setup_agent
+from http.cookies import CookieError, SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, unquote, urlparse
 
@@ -31,8 +35,22 @@ FEEDBACK_NAME = "summary.json"
 STATE_FILE = os.path.join(os.environ.get("SLUHACH_DATA") or HERE, "state.json")   # останній відкритий проєкт тощо
 OLD_FEEDBACK_NAMES = ("відгук.json",)   # старі назви — переносяться в summary.json автоматично
 HOST = "127.0.0.1"
-# Порт: змінна PORT → "port" у settings.json → 8765 (ByEar.app читає той самий settings.json)
+# Порт: змінна PORT → "port" у settings.json → 8765 (Holosii.app читає той самий settings.json)
 PORT = int(os.environ.get("PORT") or agents.load_settings().get("port") or 8765)
+# Ключ доступу: лише той, хто може прочитати цей файл (ви, Holosii.app / Holosii.exe), відкриє Голосій.
+# Інші програми й інші користувачі цього комп'ютера до сервера не достукаються.
+TOKEN_FILE = os.path.join(os.environ.get("SLUHACH_DATA") or platform_util.user_dir(), "token")
+TOKEN = platform_util.load_token(TOKEN_FILE)
+COOKIE = f"holosii_{PORT}"
+MAX_BODY = 64 * 1024 * 1024                      # найбільший POST (диктування — до ~10 МБ)
+# сторінка Голосія: лише власні скрипти, жодних сторонніх ресурсів, не вбудовується в чужі сайти
+PAGE_CSP = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; "
+            "media-src 'self' blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; "
+            "form-action 'none'; frame-ancestors 'none'")
+LOCKED_PAGE = """<!doctype html><meta charset="utf-8"><title>Голосій</title>
+<body style="font:15px -apple-system,'Segoe UI',sans-serif;color:#666;display:grid;place-items:center;height:90vh;text-align:center">
+<div><b>Голосій працює, але ця вкладка не має ключа доступу.</b><br><br>
+Відкрийте Голосій через програму (Holosii.app / Holosii.exe)<br>або запустіть server.py ще раз — він відкриє браузер з ключем.</div>"""
 
 AUDIO_EXT = {".wav", ".mp3", ".m4a", ".aac", ".flac", ".ogg", ".opus", ".aif", ".aiff"}
 MIME = {
@@ -41,7 +59,8 @@ MIME = {
     ".aif": "audio/aiff", ".aiff": "audio/aiff",
 }
 # Мітки мови/версії у назвах файлів: en.wav, ua.wav, Line_010_en.mp3 ...
-SOURCE_TAGS = ["en", "eng", "orig", "original", "src", "ref", "ja", "jp", "jpn", "old"]
+SOURCE_TAGS = ["en", "eng", "orig", "original", "src", "ref", "ja", "jp", "jpn", "old",
+               "ko", "zh", "fr", "de", "es", "it", "pt", "pl"]
 TARGET_TAGS = ["ua", "uk", "ukr", "new"]
 TAGS = "|".join(SOURCE_TAGS + TARGET_TAGS)
 # Синоніми мов → один код (для вибору еталона): eng → en, jp/jpn → ja, uk/ukr → ua
@@ -246,7 +265,7 @@ def scan(root):
     root = os.path.abspath(root)
     for d, dirs, files in os.walk(root):
         dirs[:] = sorted((x for x in dirs if not x.startswith(".")), key=nat_key)
-        rel = os.path.relpath(d, root)
+        rel = os.path.relpath(d, root).replace(os.sep, "/")   # "/" в id і шляхах і на Windows
         rel = "" if rel == "." else rel
         files = sorted(
             (f for f in files if not f.startswith(".") and f != FEEDBACK_NAME and f not in OLD_FEEDBACK_NAMES and ".tmp" not in f),
@@ -271,7 +290,7 @@ def scan(root):
         def mk(item_id, name, label, flist, tlist):
             flist = sorted(flist, key=lambda x: (tag_rank(x["tag"]), nat_key(x["name"])))
             for x in flist:
-                x["path"] = os.path.join(rel, x["name"]) if rel else x["name"]
+                x["path"] = f"{rel}/{x['name']}" if rel else x["name"]
                 try:
                     x["mtime"] = round(os.path.getmtime(os.path.join(d, x["name"])), 2)
                 except OSError:
@@ -318,7 +337,7 @@ def safe_join(root, rel):
 # ---------- HTTP ----------
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "ByEar/1.0"
+    server_version = "Holosii/1.0"
 
     def log_message(self, fmt, *args):
         pass  # тиша в Терміналі
@@ -335,9 +354,32 @@ class Handler(BaseHTTPRequestHandler):
     def error(self, msg, code=400):
         self.send_json({"error": msg}, code)
 
+    def end_headers(self):
+        self.send_header("X-Content-Type-Options", "nosniff")          # файли не вгадуються як HTML/скрипт
+        self.send_header("Cross-Origin-Resource-Policy", "same-origin")  # чужий сайт не вбудує наші файли
+        self.send_header("Referrer-Policy", "no-referrer")
+        super().end_headers()
+
     def body_json(self):
         n = int(self.headers.get("Content-Length") or 0)
         return json.loads(self.rfile.read(n) or b"{}") if n else {}
+
+    def authed(self):
+        """Чи є в запиті наш ключ доступу (cookie, яку ставить /?t=<ключ>)."""
+        try:
+            c = SimpleCookie(self.headers.get("Cookie") or "").get(COOKIE)
+        except CookieError:
+            return False
+        return bool(c) and hmac.compare_digest(c.value.encode(), TOKEN.encode())
+
+    def send_page(self, body, code=200, csp=PAGE_CSP):
+        self.send_response(code)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Content-Security-Policy", csp)
+        self.end_headers()
+        self.wfile.write(body)
 
     def qs(self):
         u = urlparse(self.path)
@@ -355,6 +397,11 @@ class Handler(BaseHTTPRequestHandler):
         if host not in hosts:
             return False
         if post:
+            try:
+                if int(self.headers.get("Content-Length") or 0) > MAX_BODY:
+                    return False
+            except ValueError:
+                return False
             origin = self.headers.get("Origin")
             if origin is not None and origin.lower() not in {"http://" + h for h in hosts}:
                 return False
@@ -368,16 +415,28 @@ class Handler(BaseHTTPRequestHandler):
         path, q = self.qs()
         if not self.allowed():
             return self.error("Заборонено", 403)
+        public = path in ("/", "/index.html", "/api/ping") or path.startswith(("/static/", "/docs/"))
+        if not public and not self.authed():
+            return self.error("Немає ключа доступу: відкрийте Голосій через програму або запустіть server.py ще раз", 401)
         try:
-            if path in ("/", "/index.html"):
-                with open(PAGE_FILE, "rb") as f:
-                    body = f.read()
-                self.send_response(200)
-                self.send_header("Content-Type", "text/html; charset=utf-8")
-                self.send_header("Content-Length", str(len(body)))
+            if path == "/api/ping":
+                # перевірка «чи це Голосій і чи він живий» — для Holosii.app / Holosii.exe, без даних
+                self.send_json({"app": "holosii"})
+            elif path in ("/", "/index.html") and q.get("t"):
+                # ключ з посилання → cookie, і одразу на адресу без ключа (щоб він не лишався в історії)
+                if not hmac.compare_digest(q["t"].encode(), TOKEN.encode()):
+                    return self.send_page(LOCKED_PAGE.encode("utf-8"), 403)
+                self.send_response(303)
+                self.send_header("Set-Cookie", f"{COOKIE}={TOKEN}; Path=/; HttpOnly; SameSite=Strict; Max-Age=31536000")
+                self.send_header("Location", "/")
+                self.send_header("Content-Length", "0")
                 self.send_header("Cache-Control", "no-store")
                 self.end_headers()
-                self.wfile.write(body)
+            elif path in ("/", "/index.html"):
+                if not self.authed():
+                    return self.send_page(LOCKED_PAGE.encode("utf-8"), 401)
+                with open(PAGE_FILE, "rb") as f:
+                    self.send_page(f.read())
             elif path.startswith("/static/") or path.startswith("/docs/"):
                 # стилі й скрипти сторінки (static/app.css, static/js/*.js) і документація (/docs/ → static/docs/)
                 rel = path[len("/static/"):] if path.startswith("/static/") else "docs/" + (path[len("/docs/"):] or "index.html")
@@ -407,7 +466,10 @@ class Handler(BaseHTTPRequestHandler):
                     fbd = load_feedback(p) if os.path.isdir(p["path"]) else {"items": {}}
                     fb = fbd["items"]
                     fl = fbd.get("folders") or {}
-                    out.append({**p, "exists": os.path.isdir(p["path"]), "agent": agents.agent_ready(p),
+                    sst = setup_agent.load(p["workspace"]) if p.get("workspace") else None
+                    if sst:
+                        sst = {"state": sst["state"], "running": sst["running"]}
+                    out.append({**p, "exists": os.path.isdir(p["path"]), "agent": agents.agent_ready(p), "setup": sst,
                                 "ok": sum(1 for v in fb.values() if v.get("status") == "ok"),
                                 "heard": sum(1 for v in fb.values() if v.get("heard") or v.get("status")),
                                 "ready_folders": sum(1 for v in fl.values() if v.get("ready") and not (v.get("embedded") and v["embedded"] >= v["ready"])),
@@ -424,20 +486,42 @@ class Handler(BaseHTTPRequestHandler):
                 items, notes = scan(p["path"])
                 with lock:
                     fbd = check_ready_folders(p, items)
-                self.send_json({"project": p, "items": items, "notes": notes,
+                # коментарі старшої моделі / оркестратора: <проєкт>/reviews.json, у застосунку лише для читання
+                try:
+                    with open(os.path.join(p["path"], "reviews.json"), encoding="utf-8") as rf:
+                        reviews = json.load(rf)
+                except (OSError, ValueError):
+                    reviews = {}
+                self.send_json({"project": p, "items": items, "notes": notes, "reviews": reviews,
                                 "feedback": fbd["items"], "folders": fbd.get("folders") or {}})
             elif path == "/api/queue":
                 self.send_json(agents.queue_state())
             elif path == "/api/config":
                 # мітки й мови — одне джерело для сервера й сторінки
                 self.send_json({"source_tags": SOURCE_TAGS, "target_tags": TARGET_TAGS,
-                                "lang_alias": LANG_ALIAS, "lang_names": LANG_NAMES})
+                                "lang_alias": LANG_ALIAS, "lang_names": LANG_NAMES,
+                                "reveal_label": platform_util.REVEAL_LABEL})
             elif path == "/api/usage":
                 # кредити сервісу генерації проєкту (кеш 2 хв; fresh=1 — оновити)
                 p = find_project(q.get("p", ""))
                 if not p:
                     return self.error("Проєкт не знайдено", 404)
                 self.send_json({"usage": agents.project_usage(p, fresh=q.get("fresh") == "1")})
+            elif path == "/api/setup":
+                # стан налаштування проєкту з гри: крок, повідомлення агента, план, результат
+                p = find_project(q.get("p", ""))
+                if not p or not p.get("workspace"):
+                    return self.error("Це не проєкт з гри", 404)
+                st = setup_agent.load(p["workspace"])
+                st["recipes"] = setup_agent.recipes()
+                self.send_json({"project": {k: p.get(k) for k in ("id", "name", "game_dir", "workspace", "path")},
+                                "setup": st})
+            elif path == "/api/setup/file":
+                p = find_project(q.get("p", ""))
+                full = setup_agent.safe_file(p["workspace"], q.get("f", "")) if p and p.get("workspace") else None
+                if not full:
+                    return self.error("Не знайдено", 404)
+                return self.send_file(full)
             elif path == "/api/limits":
                 # ліміти плану Claude (5 год / тиждень), останні відомі
                 self.send_json(agents.claude_limits())
@@ -506,7 +590,9 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         path, q = self.qs()
         if not self.allowed(post=True):
-            return self.error("Заборонено: запит не з наСлуху", 403)
+            return self.error("Заборонено: запит не з Голосія", 403)
+        if not self.authed():
+            return self.error("Немає ключа доступу: відкрийте Голосій через програму або запустіть server.py ще раз", 401)
         try:
             data = self.body_json()
         except json.JSONDecodeError:
@@ -608,7 +694,17 @@ class Handler(BaseHTTPRequestHandler):
                 want = data.get("ref")
                 want = str(want).lower() if want else None
                 lang, rf = resolve_ref(p, item, want)
-                self.send_json({"ok": True, "job": agents.add_job(p, item, comment, lang, rf and rf["path"])})
+                job = agents.add_job(p, item, comment, lang, rf and rf["path"])
+                with lock:                                   # фраза в черзі завжди позначена «Виправити»
+                    fb = load_feedback(p)
+                    e = fb["items"].get(item["id"]) or {}
+                    if e.get("status") != "fix":
+                        e = {**e, "status": "fix", "heard": True, "heardAt": round(time.time(), 2),
+                             "updated": time.strftime("%Y-%m-%dT%H:%M:%S")}
+                        e.setdefault("comment", comment.splitlines()[0][:200])
+                        fb["items"][item["id"]] = e
+                        write_json(feedback_path(p), fb)
+                self.send_json({"ok": True, "job": job})
             elif path == "/api/queue/cancel":
                 self.send_json({"ok": agents.cancel_job(str(data.get("id")))})
             elif path == "/api/queue/retry":
@@ -682,6 +778,60 @@ class Handler(BaseHTTPRequestHandler):
                 except (RuntimeError, subprocess.TimeoutExpired) as e:
                     return self.error(str(e))
                 self.send_json({"ok": True, "text": text})
+            elif path in ("/api/setup/start", "/api/setup/stop", "/api/setup/finish", "/api/setup/reveal"):
+                p = find_project(q.get("p", ""))
+                if not p or not p.get("workspace"):
+                    return self.error("Це не проєкт з гри", 404)
+                ws = p["workspace"]
+                if path == "/api/setup/start":
+                    kind = str(data.get("kind") or "")
+                    if kind not in ("survey", "extract", "talk"):
+                        return self.error("Невідомий крок")
+                    err = setup_agent.start(ws, kind, str(data.get("text") or "")[:4000])
+                    if err:
+                        return self.error(err)
+                    self.send_json({"ok": True})
+                elif path == "/api/setup/stop":
+                    self.send_json({"ok": setup_agent.stop(ws)})
+                elif path == "/api/setup/reveal":
+                    platform_util.open_folder(ws)            # робоча тека у Finder / Explorer
+                    self.send_json({"ok": True})
+                else:
+                    extra, err = setup_agent.finish(ws)
+                    if err:
+                        return self.error(err)
+                    with lock:
+                        projects = load_projects()
+                        for x in projects:
+                            if x["id"] == p["id"]:
+                                x.update(extra)
+                        save_projects(projects)
+                    self.send_json({"ok": True})
+            elif path == "/api/projects/add" and data.get("game"):
+                # проєкт з гри: робоча тека + агент налаштування
+                name = str(data.get("name") or "").strip()
+                game = os.path.abspath(os.path.expanduser(str(data.get("game") or "").strip()))
+                if not os.path.isdir(game):
+                    return self.error("Такої теки гри немає: " + game)
+                ws = str(data.get("workspace") or "").strip()
+                ws = os.path.abspath(os.path.expanduser(ws)) if ws else \
+                    os.path.join(os.path.expanduser("~/Holosii"), setup_agent.slug(name or os.path.basename(game)))
+                if ws == game or ws.startswith(game + os.sep):
+                    return self.error("Робоча тека не може бути всередині теки гри — туди нічого не пишемо")
+                if game.startswith(ws + os.sep):
+                    return self.error("Робоча тека не може містити теку гри")
+                if os.path.isdir(ws) and os.listdir(ws) and not any(os.path.isdir(os.path.join(ws, x)) for x in (".holosii", ".byear")):
+                    return self.error("Робоча тека вже існує і не порожня — вибери іншу: " + ws)
+                listen = os.path.join(ws, "listen")
+                with lock:
+                    projects = load_projects()
+                    if any(x["path"] == listen for x in projects):
+                        return self.error("Цей проєкт уже є у списку")
+                    setup_agent.create(ws, game, name or os.path.basename(game))
+                    projects.append({"name": name or os.path.basename(game), "path": listen, "agent_cwd": ws,
+                                     "workspace": ws, "game_dir": game})
+                    save_projects(projects)
+                self.send_json({"ok": True, "id": project_id(listen)})
             elif path == "/api/projects/add":
                 name = str(data.get("name") or "").strip()
                 folder = os.path.abspath(os.path.expanduser(str(data.get("path") or "").strip()))
@@ -708,21 +858,17 @@ class Handler(BaseHTTPRequestHandler):
                     save_projects(projects)
                 self.send_json({"ok": True})
             elif path == "/api/pick-folder":
-                script = ('tell application "System Events" to activate\n'
-                          'tell application "System Events" to return POSIX path of '
-                          '(choose folder with prompt "Виберіть папку проєкту")')
-                r = subprocess.run(["osascript", "-e", script], capture_output=True, text=True)
-                folder = r.stdout.strip().rstrip("/")
-                self.send_json({"path": folder} if r.returncode == 0 and folder else {"path": None})
+                folder = platform_util.pick_folder(str(data.get("prompt") or "Виберіть папку проєкту"))
+                self.send_json({"path": folder})
             elif path == "/api/reveal":
                 p = find_project(q.get("p", ""))
                 full = safe_join(p["path"], str(data.get("f") or "")) if p else None
                 if not full or not os.path.exists(full):
                     return self.error("Не знайдено", 404)
                 if data.get("open") and os.path.isdir(full):
-                    subprocess.run(["open", full])           # відкрити теку у Finder
+                    platform_util.open_folder(full)          # відкрити теку у Finder / Explorer
                 else:
-                    subprocess.run(["open", "-R", full])     # показати у Finder (виділити)
+                    platform_util.reveal(full)               # показати у Finder / Explorer (виділити)
                 self.send_json({"ok": True})
             else:
                 self.error("Немає такої дії", 404)
@@ -731,12 +877,14 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
+    platform_util.utf8_console()
     url = f"http://localhost:{PORT}"
+    open_url = f"{url}/?t={TOKEN}"                   # з ключем доступу (у консоль ключ не друкуємо)
     try:
         httpd = ThreadingHTTPServer((HOST, PORT), Handler)
     except OSError:
-        print(f"наСлух уже запущений — відкриваю {url}")
-        webbrowser.open(url)
+        print(f"Голосій уже запущений — відкриваю {url}")
+        webbrowser.open(open_url)
         return
     if not os.path.exists(PROJECTS_FILE):
         save_projects([])
@@ -744,17 +892,15 @@ def main():
     lim = agents.claude_limits()
     if not lim.get("available") or time.time() - (lim.get("seen") or 0) > 3600:
         agents.refresh_limits()                      # ліміти Claude застаріли — дізнатися у фоні
-    print(f"наСлух працює: {url}")
+    print(f"Голосій працює: {url}")
     print("Щоб зупинити — закрийте це вікно або натисніть Ctrl+C.")
     if "--no-open" not in sys.argv:
-        threading.Timer(0.6, lambda: webbrowser.open(url)).start()
-    import signal                                    # додаток ByEar.app зупиняє сервер через SIGTERM
-
-    def _term(*_):
-        raise KeyboardInterrupt
-    signal.signal(signal.SIGTERM, _term)
+        threading.Timer(0.6, lambda: webbrowser.open(open_url)).start()
+    # Holosii.app зупиняє сервер через SIGTERM, Holosii.exe — закриваючи stdin (--stdin-stop)
+    platform_util.on_terminate(lambda: threading.Thread(target=httpd.shutdown, daemon=True).start())
     try:
         httpd.serve_forever()
+        print("\nЗупинено.")
     except KeyboardInterrupt:
         print("\nЗупинено.")
     finally:

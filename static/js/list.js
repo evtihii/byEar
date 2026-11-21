@@ -1,4 +1,4 @@
-/* ByEar (наСлух) — фільтри, список фраз, відгук і збереження.
+/* Holosii (Голосій) — фільтри, список фраз, відгук і збереження.
    Звичайний (не модульний) скрипт: файли static/js/* вантажаться по черзі й ділять глобальну область. */
 /* ---------- фільтри і список ---------- */
 // «Оновлена» = фразу вже слухали/позначали, але її файли змінились пізніше, ніж ти слухав востаннє
@@ -166,6 +166,20 @@ function setStatus(st) {
   const cur = (S.fb[id] || {}).status;
   setFb(id, { status: cur === st ? null : st, heard: true, heardAt: nowSec() });
   afterFbChange();
+}
+/* «Перегенерувати»: та сама правка, що «Виправити», але з готовим завданням — коментар не потрібен */
+const REGEN_TASK = "Перегенеруй: новий дубль того самого тексту перекладу тим самим голосом (голос мовця цієї фрази). "
+  + "Більше нічого не міняй: місце, паузи й довжина — як в еталоні, гучність — як у теперішньої версії.";
+function regenerate(it) {
+  if (S.jobs.some((j) => j.pid === S.pid && j.item === it.id && (j.status === "queued" || j.status === "running"))) {
+    toast("Ця фраза вже в черзі агента"); return;
+  }
+  const ta = $("comment"); const note = ta ? ta.value.trim() : "";
+  const comment = note ? `${REGEN_TASK}\nУточнення: ${note}` : REGEN_TASK;
+  setFb(it.id, { status: "fix", comment: note || "Перегенерувати", heard: true, heardAt: nowSec() });
+  if (ta && !note) ta.value = "Перегенерувати";
+  afterFbChange();
+  enqueue(it.id, comment);
 }
 async function enqueue(id, comment) {
   const p = S.projects.find((x) => x.id === S.pid);
